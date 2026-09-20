@@ -1,137 +1,159 @@
 # news-radar
 
-Two-tier news intake replacing Reddit and Perplexity's news tab. Tier 1
-(**acute**) pushes to the phone when many independent outlets report the same
-thing at once. Tier 2 (**trends**) is an always-current Grafana surface showing
-what the world is talking about and what is new this week. There is no digest,
-no ranked reading list, and nothing to scroll.
+A world map, a chat box, and an agent. Data sources feed a judgment-free store
+of geolocated events; the map shows where the world's attention is and where it
+has just jumped; the chat answers questions by choosing how to render the
+answer (map layer, chart, or text). Acute events reach the phone as pushes;
+long-term trends are series over the same store. Open source from day one,
+self-hostable with `docker compose up`; the homelab integration is config, not
+core.
 
-Sibling of `~/dev/homelab/ai-radar` and follows its design rule: the LLM
-extracts, it never judges. Nothing is dropped for being unimportant and there
-is no interest profile. The acute trigger is content-blind by construction.
+Replaces Reddit and Perplexity's news tab as the news intake. Follows
+ai-radar's rule: nothing in the store is scored, filtered or judged. The agent
+is a lens on a complete store, applied on demand.
 
 ## Requirements
 
-- **R1 Sources are fixed and curated.** `feeds.txt` (ai-radar format) is the
-  entire source set. No social feeds, no aggregators that rank by engagement.
-  Starter set of ~20 (wire, national, regional, primary) validated reachable at
-  execute time with `load_feeds.py --check-only`; dead URLs are dropped, not
-  guessed around.
-- **R2 Polling reuses ai-radar's Miniflux** under a second Miniflux user
-  `news`, created once via `POST /v1/users` with the admin credentials. Its
-  feeds are invisible to ai-radar's `ingest.py`, which lists the admin user's
-  feeds only, so ai-radar's code and Opus spend are untouched. Nobody opens the
-  UI.
-- **R3 Storage is its own Postgres** (`news-radar-db`, postgres:17-alpine,
-  `127.0.0.1:5439`, joined to the claude-telemetry compose network so Grafana
-  reaches it by alias). One datasource, one database, uid `news`, mounted as a
-  single file the way `radar-datasource.yaml` is. `news.item` is the record;
-  Miniflux retention is not relied on. History only grows forward.
-- **R4 Ingest is deterministic and cheap.** `ingest.py` every 15 min: Miniflux
-  `/v1` → upsert on `miniflux_id` → embed `title + first 300 chars` with
-  `nomic-embed-text` on the system ollama (`:11435`) → cluster. No LLM call in
-  this path, so a model outage cannot delay an acute alert.
-- **R5 Clustering is the corroboration primitive.** Union-find over pairs with
-  cosine ≥ 0.80 whose `published_at` are within 48 h. A cluster's identity is
-  its lowest item id, so it is stable across runs and re-embedding. A cluster
-  row carries `first_seen`, `last_seen`, `source_count` (distinct feeds),
-  `item_count`, and `headline` (title of the earliest item). Threshold 0.80 is
-  the starting value and T2 fixes it against real fixtures.
-- **R6 The acute rule is a Grafana rule in a `News` folder** in
-  `~/Software/claude-telemetry/alerting/95-news.yaml`, per the machine-wide
-  one-incident-path rule. Multi-dimensional: one instance per cluster with
-  `source_count ≥ N` reached within 3 h of `first_seen` and `first_seen` in the
-  last 6 h. Labels `severity=warning`, `cluster_id`; annotation
-  `summary={{ $labels.headline }} ({{ $labels.source_count }} outlets)`.
-  `for: 0s`; the corroboration window is the debounce. One push per cluster,
-  resolves when the cluster ages out of the 6 h window.
-- **R7 The rule ships paused.** N is not guessed: `scripts/replay.py --days 7`
-  prints every cluster that would have fired for N in 3..8 after a week of
-  real polling, and N is chosen from that output at a stop point. Until then
-  `isPaused: true`.
-- **R8 Trend extraction mirrors ai-radar.** `extract.py` daily: entities of
-  kind `place | org | person | event` per item, joined through `item_entity`.
-  Model chosen by `--estimate` at execute time (Haiku 4.5 default; the inputs
-  are headlines and ledes, not abstracts). Idempotent on `extracted_at`.
-- **R9 Surface is a Grafana dashboard `news-trends`** in the `News` folder:
-  (a) live clusters, last 48 h, ranked by `source_count`; (b) volume per
-  category per day; (c) entities rising week-over-week; (d) entities first
-  seen this week against the full archive; (e) per-feed volume and
-  `parsing_error_count` so a silently dead feed is visible.
-- **R10 Watch layer is designed, not built.** A `watch` table
-  (`pattern`, `kind`, `min_sources`) and a second rule that fires on any
-  cluster matching a watched entity at a lower N. Schema reserves the table;
-  no rows, no rule, until the region/topic use case arrives.
-- **R11 Syndication counts as corroboration.** Five outlets running one AP
-  story are five editors deciding it leads; that is the magnitude signal
-  wanted, not a bug to dedupe away. Documented, not worked around.
-- **R12 Both timers are `systemd --user`** with `Persistent=true`, unit files
-  in `systemd/` symlinked into `~/.config/systemd/user/`, same as ai-radar.
-  `ANTHROPIC_API_KEY` from the user manager environment.
+### Data
 
-## Non-goals
+- **R1 Adapters, not feeds.** A source is an adapter that writes normalized
+  `event` rows. v1 ships one adapter, `gdelt`; `rss`, `usgs` and `gkg` are
+  later adapters behind the same interface (`fetch(since) -> Iterable[Event]`).
+  Adapters are registered in `source`, enabled per instance.
+- **R2 GDELT 2.0 Events every 15 min.** `lastupdate.txt` names the latest
+  `export.CSV.zip`; the adapter stores every event with a resolvable
+  `ActionGeo` point. Kept: GDELT id, occurred day, added timestamp, CAMEO code
+  and root, QuadClass, Goldstein, tone, actor names and country codes, action
+  geo (point, type, name, country, ADM1), `NumMentions`/`NumSources`/
+  `NumArticles` at first sight, source URL. Idempotent on `(source, external_id)`.
+  `masterfilelist.txt` drives backfill.
+- **R3 Backfill 30 days on first run**, so attention baselines exist before
+  the map is opened. Events only; the Mentions table is a later adapter.
+- **R4 Attention is the derived series.** `attention_hourly(region, hour,
+  events, mentions, sources)` and `attention_daily(...)` rolled up per country
+  and per ADM1 from `event`. Daily is kept forever; hourly for 90 days; raw
+  `event` for 90 days. History only grows forward.
+- **R5 Anomaly is content-blind.** `attention_anomaly` view: for each region
+  and hour, mentions z-score against the trailing 30 days of the same
+  hour-of-day. This is the acute signal for *places*. The acute signal for
+  *events* is `NumSources` at first sight. Neither reads content.
+- **R6 Storage is Postgres 17 + PostGIS + pgvector** in the repo's compose,
+  volume on `/mnt/fast`, `127.0.0.1:5439`, joined to the claude-telemetry
+  network only via a compose override that is not in core. Read-only role
+  `reader` with `statement_timeout=10s` for the agent.
 
-Summaries of individual articles. A reading queue. Any score, interest
-profile or thumbs. A second notifier. Migrating ai-radar into this repo.
+### Surface
 
-## Schema (news database)
+- **R7 Next.js app** (`web/`): MapLibre GL globe projection, deck.gl layers,
+  Vega-Lite charts, one page. Default view without any chat: last-24 h
+  attention anomaly as a heat layer over countries, top events by
+  `NumSources` as points, a 30-day attention sparkline for the hovered region.
+- **R8 Chat drives rendering.** `/api/chat` runs Claude with two tools:
+  `sql` (read-only role, LIMIT enforced, schema in the system prompt) and
+  `render`, whose argument is typed JSON the client draws:
+  `{kind:"map", layer:"points"|"heat"|"choropleth", features, legend}`,
+  `{kind:"chart", spec: <Vega-Lite>}`, `{kind:"text", markdown}`. One turn
+  may emit several renders; the map keeps the last map render as a layer
+  until replaced or cleared.
+- **R9 The agent sees the schema, not a curated tool list.** The system
+  prompt carries the DDL and the CAMEO root-code and QuadClass legends so it
+  can write its own queries. Typed convenience tools come only if `sql` is
+  measured to fail on common asks.
+- **R10 No auth in core.** The homelab deploy sits behind authentik forward
+  auth like radar.jameson.casa, in the ingress repo, not here.
+
+### Acute delivery
+
+- **R11 Detection is a Grafana rule, not app code**, per the machine-wide
+  one-incident-path rule. Two rules in `~/Software/claude-telemetry/alerting/
+  95-news.yaml`, `News` folder, datasource uid `news`: (a) region attention
+  z ≥ Z in the last hour, instance per region, summary names the region and
+  the top event there; (b) event `NumSources ≥ N` added in the last 3 h,
+  instance per event, summary is the actor/action line and source URL.
+  `severity=warning`, `for: 0s`.
+- **R12 Both rules ship paused.** `scripts/replay.py --days 30` tabulates what
+  would have fired for Z in 3..6 and N in 20..100; thresholds are picked from
+  that table at a stop point.
+- **R13 Core offers a generic webhook sink, off by default**, so a
+  self-hoster without Grafana can still get pushes. The homelab instance
+  leaves it off; the Grafana rule is the notifier.
+
+### Project
+
+- **R14 Public repo, Apache-2.0**, `github.com/jamesonhohbein/news-radar`.
+  README is the product doc; `specs/` is the record. Nothing host-specific
+  committed: `.env.example`, `docker-compose.override.yml` gitignored.
+- **R15 Timers are `systemd --user`** with `Persistent=true` on the homelab
+  host; the compose also ships a `scheduler` service running the same loop
+  for self-hosters.
+
+## Non-goals (v1)
+
+Article summaries, a reading queue, any interest profile, GKG themes, the
+Mentions table, RSS, user accounts, mobile layout, a second notifier.
+
+## Schema
 
 ```
-item          id, miniflux_id UNIQUE, title, url, feed, category,
-              published_at, content, embedding vector(768),
-              cluster_id BIGINT NULL, extracted_at, inserted_at
-cluster       id (= min item id), first_seen, last_seen, source_count,
-              item_count, headline, updated_at
-entity        id, key UNIQUE, display, kind
-item_entity   (item_id, entity_id) PK
-watch         id, pattern, kind, min_sources, created_at   -- R10, empty
-feed_health   view over item: per feed, items/day, last item
-live_cluster  view: clusters with first_seen > now() - 48h
+source            id, kind, config jsonb, enabled, created_at
+event             id, source_id, external_id, occurred_on, added_at,
+                  cameo_code, cameo_root, quad_class, goldstein, tone,
+                  actor1_name, actor1_country, actor2_name, actor2_country,
+                  geo_type, geo_name, country, adm1, geom geometry(Point,4326),
+                  num_mentions, num_sources, num_articles, url
+                  UNIQUE (source_id, external_id); GIST on geom; BRIN on added_at
+attention_hourly  region_kind ('country'|'adm1'), region, hour, events,
+                  mentions, sources          PK (region_kind, region, hour)
+attention_daily   same shape, day
+attention_anomaly view: hourly z-score vs trailing 30d same-hour baseline
+acute_candidates  view: rows the two rules read, so replay and rules share SQL
+watch             id, pattern, kind, min_sources    -- reserved, empty
 ```
 
-`pgvector` for `embedding`; clustering compares only against items in the
-48 h window, so the index is a nicety, not a requirement.
+## GDELT facts the code depends on
 
-## Starter feeds (validated at execute; dead ones dropped)
-
-Wire/global: BBC World, Guardian World, NPR News, Al Jazeera, DW, France 24,
-NYT World, WaPo World, CBC World, ABC (AU) Just In, UN News.
-Primary: USGS significant earthquakes, GDACS, Federal Reserve press releases,
-WA Emergency Management. Regional: Seattle Times, Cascadia Daily News,
-Bellingham Herald, KUOW.
-
-Primary feeds are single-source and will not corroborate on their own; they
-exist for the trend tier and the future watch layer.
+- Files are tab-separated, 61 columns, no header; column order is the v2
+  codebook and is pinned in `adapters/gdelt.py` as a tuple.
+- `NumMentions/NumSources/NumArticles` are counted within the 15-min window
+  the event first appeared in; later coverage is only in Mentions. So
+  `NumSources` is a *burst* measure, which is what the acute rule wants.
+- One real-world event yields many GDELT events (actor pair × action ×
+  location). The map aggregates by region; the event rule fires per GDELT id
+  and the notification groups by `grafana_folder`, so one story is one push.
+- ~150k events/day, ~2 MB per 15-min zip. 30-day backfill is ~6 GB download
+  and ~4.5M rows; roughly an hour on this link.
 
 ## Tests
 
 | ID | Traces | Asserts |
 |---|---|---|
-| T1 | R4 | `ingest.py` re-run inserts zero new rows and changes no cluster |
-| T2 | R5 | Fixture of 12 real headlines (3 events × 4 outlets) yields exactly 3 clusters; 12 unrelated headlines yield 12 |
-| T3 | R5 | A cluster's id is unchanged after adding a later item to it |
-| T4 | R6 | Rule `rawSql` loaded from the YAML, run on synthetic rows: 5 feeds in 2 h fires, 5 feeds over 5 h does not, 2 feeds in 1 h does not |
-| T5 | R6 | Rule YAML carries `severity` label and `summary` annotation |
-| T6 | R7 | `replay.py` output for a synthetic week matches T4's hand count |
-| T7 | R8 | `extract.py` re-run inserts zero `item_entity` rows |
-| T8 | R1 | `load_feeds.py --check-only` exits non-zero on an unreachable URL |
-
-T4 uses the pse test pattern: the provisioned SQL is what runs, not a copy.
+| T1 | R2 | Parsing a fixture export file yields the pinned columns with correct types; events without geo are skipped and counted |
+| T2 | R2 | Re-ingesting the same file inserts zero rows |
+| T3 | R4 | Rollup over fixture events produces the hand-computed hourly and daily rows |
+| T4 | R5 | Anomaly view: a region with flat baseline and a 5x hour yields z above 3; a flat region yields |z| below 1 |
+| T5 | R11 | Both rules' `rawSql` loaded from the YAML and run on synthetic rows: fire and non-fire cases each |
+| T6 | R11 | Rule YAML carries `severity` label and `summary` annotation |
+| T7 | R12 | `replay.py` on synthetic rows matches T5's hand count |
+| T8 | R8 | `render` payloads validate against the JSON schema; an invalid payload is rejected before reaching the client |
+| T9 | R8 | `sql` tool refuses non-SELECT and enforces LIMIT; a 20 s query is cut at 10 s |
+| T10 | R7 | Playwright: page loads, globe renders, default layers appear with the seeded fixture |
 
 ## Phases and stop points
 
-1. Repo, compose, schema, Miniflux user, feeds, `ingest.py` with clustering,
-   timers. Tests T1-T3, T8. **Ends with a week of polling.**
-2. Replay over that week. **Stop: choose N from the replay table.** Then
-   `95-news.yaml` unpaused, T4-T6, first live push.
-3. `extract.py`, dashboard, T7. **Stop: review dashboard, prune feeds by
-   entities contributed** (ai-radar's rule: judge a feed on entities, not
-   entry count).
+1. Repo, compose, schema, `gdelt` adapter, rollups, backfill, timers. T1-T4.
+   **Ends when 30 days are in and the anomaly view returns rows.**
+2. Web app with default layers, no chat. T10. **Stop: look at the globe.**
+3. Chat with `sql` + `render`. T8-T9. **Stop: try ten real questions; decide
+   whether typed tools are needed (R9).**
+4. `95-news.yaml` paused, replay, **stop: pick Z and N**, unpause, first
+   push. T5-T7.
+5. Publish: README, `.env.example`, license, `rss` adapter as the worked
+   example of adding a source.
 
 ## Assumptions stated
 
-- Cosine 0.80 on `nomic-embed-text`; T2 may move it.
-- 15-min ingest against Miniflux's 30-min poll, so worst-case lag to a push is
-  ~45 min plus Grafana's evaluation interval (1 m).
-- Regional feeds count toward N. If they inflate local-only stories past N,
-  the fix is a per-category weight, decided at the phase 2 stop.
+- Regions are country and ADM1 as GDELT codes them; no own geocoding in v1.
+- Z and N are unset until phase 4; nothing pushes before then.
+- Repo name stays `news-radar` until publishing; renaming is one command.
+- The claude-telemetry datasource and the two rules are the only changes
+  outside this repo.
