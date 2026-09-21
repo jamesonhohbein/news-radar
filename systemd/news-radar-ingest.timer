@@ -1,0 +1,12 @@
+[Unit]
+Description=news-radar ingest every 15 minutes
+
+[Timer]
+# GDELT publishes at :00 :15 :30 :45 and the file lands a minute or two later.
+OnCalendar=*:03/15
+# catchup reaches back six hours, so a slept-through window is recovered on
+# the next tick; Persistent=true makes that tick happen promptly after boot.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

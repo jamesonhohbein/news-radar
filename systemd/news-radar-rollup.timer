@@ -1,0 +1,9 @@
+[Unit]
+Description=news-radar rollup hourly
+
+[Timer]
+OnCalendar=*:10
+Persistent=true
+
+[Install]
+WantedBy=timers.target

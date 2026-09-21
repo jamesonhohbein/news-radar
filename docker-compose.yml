@@ -1,0 +1,29 @@
+# news-radar: the database only. The ingest, rollup and detector loops run on
+# the host (systemd --user on the homelab box; see systemd/) or in the
+# `scheduler` service once it exists (R15, later phase).
+services:
+  db:
+    build: ./db
+    container_name: news-radar-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: newsradar
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: newsradar
+    volumes:
+      # Named volume. On the homelab host Docker's data root is already on the
+      # NVMe (/mnt/fast/docker), which is where a write-heavy database must
+      # live; the shingled system disk is not an option for it.
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      # Loopback only. The app and the loops are on this host; nothing else
+      # needs the port. 5443 because 5432-5442 are taken on the homelab box.
+      - "127.0.0.1:${POSTGRES_PORT:-5443}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U newsradar -d newsradar"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

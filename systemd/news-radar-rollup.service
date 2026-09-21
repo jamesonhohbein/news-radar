@@ -1,0 +1,8 @@
+[Unit]
+Description=news-radar: attention rollups, anomaly, prune
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/dev/homelab/news-radar
+ExecStart=%h/dev/homelab/news-radar/.venv/bin/python rollup.py

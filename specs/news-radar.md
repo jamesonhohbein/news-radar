@@ -38,7 +38,7 @@ is a lens on a complete store, applied on demand.
   hour-of-day. This is the acute signal for *places*. The acute signal for
   *events* is `NumSources` at first sight. Neither reads content.
 - **R6 Storage is Postgres 17 + PostGIS + pgvector** in the repo's compose,
-  volume on `/mnt/fast`, `127.0.0.1:5439`, nothing joins it to the
+  named volume (on the homelab host Docker's data root is the NVMe), `127.0.0.1:5443`, nothing joins it to the
   claude-telemetry network; Grafana is not in the loop. Read-only role
   `reader` with `statement_timeout=10s` for the agent.
 
@@ -126,8 +126,8 @@ watch             id, pattern, kind, min_sources    -- reserved, empty
 - One real-world event yields many GDELT events (actor pair × action ×
   location). The map aggregates by region; the event rule fires per GDELT id
   and the notification groups by `grafana_folder`, so one story is one push.
-- ~150k events/day, ~2 MB per 15-min zip. 30-day backfill is ~6 GB download
-  and ~4.5M rows; roughly an hour on this link.
+- Measured 2026-09-20: ~580 events per 15-min file (~60 KB zipped), so
+  ~55k/day. A 30-day backfill is 2,880 files, 179 MB zipped, ~1.7M rows.
 
 ## Tests
 
