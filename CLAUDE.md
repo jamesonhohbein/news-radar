@@ -45,3 +45,22 @@ root-owned.
 
 **Tests need the container up.** They create `newsradar_test` on the running
 server and drop it after. There is no in-process fallback.
+
+**MapLibre stays on 5.x, not 6.** v6 is ESM-only with its worker in a separate
+`maplibre-gl-shared.mjs` chunk, and under Next's bundling the worker was
+spawned at the *page URL*: it loaded HTML as a script, failed silently, and
+every source sat at `isSourceLoaded() === false` forever with no console
+error and no failed request. A bare grey globe with a healthy canvas is that
+bug. v5 ships one bundle with a blob worker and has globe projection.
+
+**`pkill -f "next-server"` kills the shell that runs it**, because the pattern
+matches its own command line. Use `pkill -f "[n]ext-server"`, or better,
+`systemctl --user restart news-radar-web`.
+
+**The tint is share of world attention, not counts.** Absolute mentions carry
+the weekday cycle and GDELT's volume drift, so on a Sunday every country is
+"below baseline" and on a peak-hour basis every country spikes somewhere in
+a day. `/api/anomaly` scores each region's share of the 24 h world total
+against its 30 daily shares. The hourly `attention_anomaly` table still uses
+counts against the same hour of day; making it share-based too is an open
+item for the detector phase.

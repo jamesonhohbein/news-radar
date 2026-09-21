@@ -69,6 +69,18 @@ SET mentions = EXCLUDED.mentions, baseline_mean = EXCLUDED.baseline_mean,
 """
 
 
+# geo_type 1 is "country" in GDELT's coding, so geo_name there is the
+# country's own name; mode() picks the spelling the source uses most.
+_NAMES = """
+INSERT INTO region_name (region_kind, region, name)
+SELECT 'country', country, mode() WITHIN GROUP (ORDER BY geo_name)
+FROM event
+WHERE geo_type = 1 AND geo_name IS NOT NULL AND added_at > now() - interval '7 days'
+GROUP BY country
+ON CONFLICT (region_kind, region) DO UPDATE SET name = EXCLUDED.name
+"""
+
+
 def rollup(conn, since: datetime, until: datetime | None = None, anomaly: bool = True) -> dict[str, int]:
     until = until or datetime.now(timezone.utc) + timedelta(hours=1)
     out = {}
@@ -79,6 +91,7 @@ def rollup(conn, since: datetime, until: datetime | None = None, anomaly: bool =
         out["daily"] = conn.execute(_DAILY, {"since": since}).rowcount
         if anomaly:
             out["anomaly"] = conn.execute(_ANOMALY, {"since": since, "until": until}).rowcount
+            out["names"] = conn.execute(_NAMES).rowcount
     return out
 
 

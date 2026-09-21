@@ -145,3 +145,13 @@ SELECT s.name,
 FROM source s
 LEFT JOIN fetch_log f ON f.source_id = s.id
 GROUP BY s.id;
+
+-- Region display names as the source itself labels them, refreshed by
+-- rollup.py from country-level events. Covers the microstates that a 110m
+-- country file lacks, and later ADM1 codes, without a hand-kept table.
+CREATE TABLE IF NOT EXISTS region_name (
+    region_kind TEXT NOT NULL,
+    region      TEXT NOT NULL,
+    name        TEXT NOT NULL,
+    PRIMARY KEY (region_kind, region)
+);
