@@ -42,6 +42,16 @@ is a lens on a complete store, applied on demand.
   claude-telemetry network; Grafana is not in the loop. Read-only role
   `reader` with `statement_timeout=10s` for the agent.
 
+- **R16 Stories carry headlines.** GDELT gives actor codes and a URL, not a
+  title, so a dot reads "SAINT → None". `headlines.py` fetches the page
+  `<title>` (falling back to `og:title`) for every event URL with
+  `NumSources ≥ 2` seen in the last 24 h, into `story(url, title, site,
+  status, attempts, fetched_at)`. Measured 2026-09-20: ~350 URLs/day at that
+  threshold. One fetch per URL, 10 s timeout, 512 KB cap, a named
+  User-Agent; failures retry up to 3 times, at least 6 h apart. Runs after
+  every ingest. Adapters that carry titles natively (RSS) write `story`
+  directly and skip the fetch.
+
 ### Surface
 
 - **R7 Next.js app** (`web/`): MapLibre GL 5, flat mercator by decision 2026-09-20 (the globe was built first and rejected on sight), native
@@ -148,13 +158,18 @@ watch             id, pattern, kind, min_sources    -- reserved, empty
 | T7 | R12 | `replay.py` on synthetic rows matches T5's hand count; with Z or N unset the detector sends nothing |
 | T8 | R8 | `render` payloads validate against the JSON schema; an invalid payload is rejected before reaching the client |
 | T9 | R8 | `sql` tool refuses non-SELECT and enforces LIMIT; a 20 s query is cut at 10 s |
+| T11 | R16 | Title extraction on fixture HTML: `<title>`, `og:title` fallback, entity decoding, whitespace collapse, no title at all |
+| T12 | R16 | Selection: URLs at `NumSources ≥ 2` in-window are picked, fetched rows are not re-picked, failed rows are re-picked only after 6 h and under 3 attempts |
 | T10 | R7 | Playwright against the running service and live database: APIs return rows, params clamp, globe renders with both layers populated and no page errors |
 
 ## Phases and stop points
 
 1. Repo, compose, schema, `gdelt` adapter, rollups, backfill, timers. T1-T4.
    **Ends when 30 days are in and the anomaly view returns rows.**
-2. Web app with default layers, no chat. T10. **Stop: look at the globe.**
+2. Web app with default layers, no chat. T10. **Stop: look at the map.**
+   Done 2026-09-20; flat map by decision. Then headlines (R16, T11-T12),
+   the first of the ingestion pass that was pulled ahead of chat and
+   detection by decision the same day.
 3. Chat with `sql` + `render`. T8-T9. **Stop: try ten real questions; decide
    whether typed tools are needed (R9).**
 4. Detector with `log` sink, replay, **stop: pick Z and N**, HA webhook

@@ -155,3 +155,16 @@ CREATE TABLE IF NOT EXISTS region_name (
     name        TEXT NOT NULL,
     PRIMARY KEY (region_kind, region)
 );
+
+-- Headlines for story URLs (R16). GDELT carries no title; this is fetched
+-- from the page. One row per URL regardless of how many events cite it.
+CREATE TABLE IF NOT EXISTS story (
+    url        TEXT        PRIMARY KEY,
+    title      TEXT,
+    site       TEXT,
+    status     TEXT        NOT NULL,   -- 'ok' | 'fail'
+    attempts   INT         NOT NULL DEFAULT 1,
+    fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    first_seen TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS story_retry ON story (fetched_at) WHERE status = 'fail';
