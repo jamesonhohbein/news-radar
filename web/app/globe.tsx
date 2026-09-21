@@ -30,13 +30,15 @@ export default function Globe() {
 
   useEffect(() => {
     if (!el.current || mapRef.current) return;
-    const map = new maplibregl.Map({ container: el.current, style: STYLE, center: [10, 20], zoom: 1.9, attributionControl: { compact: true } });
+    // Flat (mercator) by decision 2026-09-20; the globe was tried and rejected.
+    // renderWorldCopies off so a story is one dot, not three.
+    const map = new maplibregl.Map({ container: el.current, style: STYLE, center: [10, 20], zoom: 1.5, minZoom: 1, renderWorldCopies: false, attributionControl: { compact: true } });
     mapRef.current = map;
     (window as unknown as { __map: MLMap }).__map = map;
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
     map.on("style.load", async () => {
-      map.setProjection({ type: "globe" });
+      map.fitBounds([[-170, -58], [180, 78]], { padding: 8, duration: 0 });
       const [countries, anomaly, top] = await Promise.all([
         fetch("/countries.geojson").then((r) => r.json()),
         fetch("/api/anomaly?kind=country").then((r) => r.json()),

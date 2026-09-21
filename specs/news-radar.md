@@ -44,7 +44,7 @@ is a lens on a complete store, applied on demand.
 
 ### Surface
 
-- **R7 Next.js app** (`web/`): MapLibre GL 5 globe projection with native
+- **R7 Next.js app** (`web/`): MapLibre GL 5, flat mercator by decision 2026-09-20 (the globe was built first and rejected on sight), native
   fill and circle layers (deck.gl only when a layer type needs it; its
   overlay on the globe projection is unproven), Vega-Lite charts from phase
   3, one page. Default view without any chat: last-24 h attention as a
