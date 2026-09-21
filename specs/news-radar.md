@@ -17,8 +17,9 @@ is a lens on a complete store, applied on demand.
 ### Data
 
 - **R1 Adapters, not feeds.** A source is an adapter that writes normalized
-  `event` rows. v1 ships one adapter, `gdelt`; `rss`, `usgs` and `gkg` are
-  later adapters behind the same interface (`fetch(since) -> Iterable[Event]`).
+  `event` rows. Two shapes: file adapters (`gdelt`) publish a series of files;
+  feed adapters (`usgs`, `gdacs`) publish one endpoint holding current
+  state. `rss` and `gkg` come later behind the same module contract.
   Adapters are registered in `source`, enabled per instance.
 - **R2 GDELT 2.0 Events every 15 min.** `lastupdate.txt` names the latest
   `export.CSV.zip`; the adapter stores every event with a resolvable
@@ -51,6 +52,19 @@ is a lens on a complete store, applied on demand.
   User-Agent; failures retry up to 3 times, at least 6 h apart. Runs after
   every ingest. Adapters that carry titles natively (RSS) write `story`
   directly and skip the fetch.
+
+- **R17 Primary feeds are ground truth, not coverage.** `usgs` (M4.5+
+  quakes, GeoJSON) and `gdacs` (disaster alerts, RSS with georss points)
+  are feed adapters: one endpoint holding current state, fetched whole and
+  upserted every 15 min, because a quake's magnitude and an alert's level
+  are revised in place. Neither gives a country, so both are reverse
+  geocoded in PostGIS against the Natural Earth polygons (`country_shape`:
+  containing polygon, else nearest within 100 km, else empty). Their events
+  carry `props` (magnitude, depth, alert level, event type) and
+  `source.attention = false`: they never enter the attention series, and
+  the map draws them as their own layer (quakes sized by magnitude, GDACS
+  alerts above Green). NHC was dropped: GDACS's tropical-cyclone class is
+  global.
 
 ### Surface
 
@@ -160,6 +174,10 @@ watch             id, pattern, kind, min_sources    -- reserved, empty
 | T9 | R8 | `sql` tool refuses non-SELECT and enforces LIMIT; a 20 s query is cut at 10 s |
 | T11 | R16 | Title extraction on fixture HTML: `<title>`, `og:title` fallback, entity decoding, whitespace collapse, no title at all |
 | T12 | R16 | Selection: URLs at `NumSources ≥ 2` in-window are picked, fetched rows are not re-picked, failed rows are re-picked only after 6 h and under 3 attempts |
+| T13 | R17 | USGS fixture parses to typed events with magnitude, depth and UTC time, country empty |
+| T14 | R17 | GDACS fixture parses with stable `{type}{eventid}` ids, alert level, and a modified timestamp |
+| T15 | R17 | Reverse geocode: inland point gets its country, a point 40 km offshore gets the nearest, mid-ocean stays empty |
+| T16 | R17 | A revised event updates `props` but keeps its geocoded country; primary events add nothing to `attention_hourly` |
 | T10 | R7 | Playwright against the running service and live database: APIs return rows, params clamp, globe renders with both layers populated and no page errors |
 
 ## Phases and stop points
@@ -167,9 +185,11 @@ watch             id, pattern, kind, min_sources    -- reserved, empty
 1. Repo, compose, schema, `gdelt` adapter, rollups, backfill, timers. T1-T4.
    **Ends when 30 days are in and the anomaly view returns rows.**
 2. Web app with default layers, no chat. T10. **Stop: look at the map.**
-   Done 2026-09-20; flat map by decision. Then headlines (R16, T11-T12),
-   the first of the ingestion pass that was pulled ahead of chat and
-   detection by decision the same day.
+   Done 2026-09-20; flat map by decision. Then the ingestion pass that was
+   pulled ahead of chat and detection by decision the same day: headlines
+   (R16, T11-T12) and primary feeds (R17, T13-T16), both done 2026-09-20.
+   Still open in that pass: GDELT Mentions, GKG (needs a retention
+   decision), curated RSS.
 3. Chat with `sql` + `render`. T8-T9. **Stop: try ten real questions; decide
    whether typed tools are needed (R9).**
 4. Detector with `log` sink, replay, **stop: pick Z and N**, HA webhook

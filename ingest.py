@@ -4,6 +4,7 @@
     ingest.py latest              # the newest GDELT export, if not already loaded
     ingest.py backfill --days 30  # everything in the master list since then
     ingest.py catchup             # files since the last one logged (what the timer runs)
+    ingest.py primary             # the feed adapters (USGS, GDACS): fetch, upsert, geocode
 
 Every path is idempotent: fetch_log skips files, the event unique key skips
 rows. Downloads run in a small pool; inserts are sequential in one
@@ -18,10 +19,11 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 from newsradar import store
-from newsradar.adapters import gdelt
+from newsradar.adapters import gdacs, gdelt, usgs
 from newsradar.db import connect
 
 SOURCE = "gdelt-events"
+FEEDS = (usgs, gdacs)
 
 
 def load_files(conn, sid: int, files: list[str], workers: int = 4) -> tuple[int, int]:
@@ -69,16 +71,50 @@ def _fetch_or_none(file: str, attempts: int = 4) -> bytes | None:
             time.sleep(2 ** i)
 
 
+def load_feeds(conn) -> list[str]:
+    """Each feed is one endpoint holding current state; the whole thing is
+    fetched and upserted every run. fetch_log gets one row per run, keyed by
+    kind and minute, so source_health can see the feed is alive."""
+    out = []
+    for mod in FEEDS:
+        try:
+            sid = store.source_id(conn, mod.SOURCE)
+        except SystemExit:
+            out.append(f"{mod.KIND}: disabled")
+            continue
+        try:
+            blob = mod.fetch()
+        except Exception as exc:  # noqa: BLE001
+            out.append(f"{mod.KIND}: fetch failed: {exc}")
+            continue
+        events = list(mod.parse(blob))
+        try:
+            n = store.insert_events(conn, sid, events, update=True)
+            geocoded = store.reverse_geocode(conn, sid)
+            store.log_fetch(conn, sid, f"{mod.KIND}:{datetime.now(timezone.utc):%Y%m%d%H%M}", len(events), len(events))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        out.append(f"{mod.KIND}: {len(events)} events, {n} upserted, {geocoded} geocoded")
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("latest")
     sub.add_parser("catchup")
+    sub.add_parser("primary")
     b = sub.add_parser("backfill")
     b.add_argument("--days", type=int, default=30)
     args = ap.parse_args()
 
     with connect() as conn:
+        if args.cmd == "primary":
+            for line in load_feeds(conn):
+                print(line)
+            return
         sid = store.source_id(conn, SOURCE)
         if args.cmd == "latest":
             files = [gdelt.latest()]

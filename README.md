@@ -24,8 +24,9 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python rollup.py --full
 ```
 
-Then on a schedule: `ingest.py catchup` then `headlines.py` every 15
-minutes, and `rollup.py` hourly. `systemd/` has user units; symlink them into
+Then `scripts/load_countries.py` once, and on a schedule: `ingest.py
+catchup`, `headlines.py` and `ingest.py primary` every 15 minutes, and
+`rollup.py` hourly. `systemd/` has user units; symlink them into
 `~/.config/systemd/user/` and `systemctl --user enable --now` both timers.
 
 The map:
@@ -44,12 +45,13 @@ positron, no key). `/api/anomaly`, `/api/events/top` and
 
 | Table | Holds |
 |---|---|
-| `event` | One row per geolocated event. GDELT's vocabulary: CAMEO code, QuadClass, Goldstein, tone, actors, action geo, and the mention/source/article counts from the 15-minute window it first appeared in |
+| `event` | One row per geolocated event. GDELT's vocabulary: CAMEO code, QuadClass, Goldstein, tone, actors, action geo, and the mention/source/article counts from the 15-minute window it first appeared in. Primary-feed events use the same row with `props` for what GDELT has no column for (magnitude, alert level) |
+| `country_shape` | Natural Earth 110m polygons by FIPS code, for reverse geocoding sources that give a point but no country. Loaded by `scripts/load_countries.py` |
 | `attention_hourly`, `attention_daily` | Events, mentions and sources per country and per ADM1. Hourly kept 90 days, daily forever |
 | `attention_anomaly` | Each of the last 48 hours against the same hour of day over the trailing 30 days: mean, sd, z. Materialized hourly by `rollup.py` |
 | `fetch_log` | Every file loaded, with rows seen and kept. A gap here is a gap in the series |
 | `story` | Headline and site per story URL, fetched from the page after each ingest for URLs at 2+ first-window sources; failures retry 3 times, 6 h apart |
-| `source`, `alert`, `watch` | Adapter registry; what the detector has sent (later phase); reserved |
+| `source`, `alert`, `watch` | Adapter registry (`attention` says whether a source's events count as coverage); what the detector has sent (later phase); reserved |
 
 Two facts about GDELT that shape everything above:
 
@@ -73,10 +75,14 @@ service and the live database. Test IDs trace to requirements in the spec.
 
 ## Adding a source
 
-An adapter is a module in `newsradar/adapters/` exposing `latest()`,
-`list_files(since)`, `fetch(file)` and `parse(file, blob)` yielding
-`Event`s, plus a row in `source`. It never touches the database. `gdelt.py`
-is the worked example; an `rss` adapter is the planned second one.
+An adapter is a module in `newsradar/adapters/` plus a row in `source`. It
+never touches the database. Two shapes, documented in
+`newsradar/adapters/__init__.py`: file adapters (`gdelt.py`) publish a
+series of files and are loaded once each; feed adapters (`usgs.py`,
+`gdacs.py`) publish one endpoint holding current state and are fetched
+whole and upserted every run. Set `source.attention = false` for anything
+that is ground truth rather than coverage, and leave `country` empty to
+have it reverse geocoded.
 
 ## License
 
