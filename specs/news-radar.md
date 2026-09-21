@@ -38,8 +38,8 @@ is a lens on a complete store, applied on demand.
   hour-of-day. This is the acute signal for *places*. The acute signal for
   *events* is `NumSources` at first sight. Neither reads content.
 - **R6 Storage is Postgres 17 + PostGIS + pgvector** in the repo's compose,
-  volume on `/mnt/fast`, `127.0.0.1:5439`, joined to the claude-telemetry
-  network only via a compose override that is not in core. Read-only role
+  volume on `/mnt/fast`, `127.0.0.1:5439`, nothing joins it to the
+  claude-telemetry network; Grafana is not in the loop. Read-only role
   `reader` with `statement_timeout=10s` for the agent.
 
 ### Surface
@@ -64,19 +64,24 @@ is a lens on a complete store, applied on demand.
 
 ### Acute delivery
 
-- **R11 Detection is a Grafana rule, not app code**, per the machine-wide
-  one-incident-path rule. Two rules in `~/Software/claude-telemetry/alerting/
-  95-news.yaml`, `News` folder, datasource uid `news`: (a) region attention
-  z ≥ Z in the last hour, instance per region, summary names the region and
-  the top event there; (b) event `NumSources ≥ N` added in the last 3 h,
-  instance per event, summary is the actor/action line and source URL.
-  `severity=warning`, `for: 0s`.
-- **R12 Both rules ship paused.** `scripts/replay.py --days 30` tabulates what
-  would have fired for Z in 3..6 and N in 20..100; thresholds are picked from
-  that table at a stop point.
-- **R13 Core offers a generic webhook sink, off by default**, so a
-  self-hoster without Grafana can still get pushes. The homelab instance
-  leaves it off; the Grafana rule is the notifier.
+- **R11 Detection is app code.** `acute_firing` view applies `Z` and `N`
+  from instance config and returns the rows that should be alerting now:
+  (a) regions whose attention z-score over the last hour is ≥ Z, with the
+  top event there; (b) events with `NumSources ≥ N` added in the last 3 h.
+  `detector.py` polls it every 5 min, writes one `alert` row per new
+  `(kind, key)`, and hands the row to the configured sinks. `alert.sent_at`
+  is the dedup; a key that has fired is not re-sent for 24 h.
+- **R12 Thresholds are unset until replayed.** `scripts/replay.py --days 30`
+  tabulates what would have fired for Z in 3..6 and N in 20..100; Z and N
+  are picked from that table at a stop point. With either unset the
+  detector logs candidates and sends nothing.
+- **R13 Sinks are pluggable.** Core ships `log` and `webhook` (generic JSON
+  POST, payload documented in the README). The homelab instance's webhook
+  target is a Home Assistant webhook automation that forwards to the iPhone
+  companion app; that automation lives on the Pi, not in this repo.
+  **This is a deliberate second notifier on hog, decided 2026-09-20**, an
+  exception to the one-incident-path rule; the `alert` table is its record
+  and nothing here writes to `alert_journal` or to Grafana.
 
 ### Project
 
@@ -90,7 +95,7 @@ is a lens on a complete store, applied on demand.
 ## Non-goals (v1)
 
 Article summaries, a reading queue, any interest profile, GKG themes, the
-Mentions table, RSS, user accounts, mobile layout, a second notifier.
+Mentions table, RSS, user accounts, mobile layout, a Grafana rule.
 
 ## Schema
 
@@ -106,7 +111,8 @@ attention_hourly  region_kind ('country'|'adm1'), region, hour, events,
                   mentions, sources          PK (region_kind, region, hour)
 attention_daily   same shape, day
 attention_anomaly view: hourly z-score vs trailing 30d same-hour baseline
-acute_candidates  view: rows the two rules read, so replay and rules share SQL
+acute_firing      view: rows the detector sends, so replay and detector share SQL
+alert             id, kind, key, payload jsonb, created_at, sent_at, sink
 watch             id, pattern, kind, min_sources    -- reserved, empty
 ```
 
@@ -131,9 +137,9 @@ watch             id, pattern, kind, min_sources    -- reserved, empty
 | T2 | R2 | Re-ingesting the same file inserts zero rows |
 | T3 | R4 | Rollup over fixture events produces the hand-computed hourly and daily rows |
 | T4 | R5 | Anomaly view: a region with flat baseline and a 5x hour yields z above 3; a flat region yields |z| below 1 |
-| T5 | R11 | Both rules' `rawSql` loaded from the YAML and run on synthetic rows: fire and non-fire cases each |
-| T6 | R11 | Rule YAML carries `severity` label and `summary` annotation |
-| T7 | R12 | `replay.py` on synthetic rows matches T5's hand count |
+| T5 | R11 | `acute_firing` on synthetic rows: region and event fire cases, and non-fire cases, each |
+| T6 | R11 | `detector.py` run twice over the same rows sends once; the `alert` row carries the payload |
+| T7 | R12 | `replay.py` on synthetic rows matches T5's hand count; with Z or N unset the detector sends nothing |
 | T8 | R8 | `render` payloads validate against the JSON schema; an invalid payload is rejected before reaching the client |
 | T9 | R8 | `sql` tool refuses non-SELECT and enforces LIMIT; a 20 s query is cut at 10 s |
 | T10 | R7 | Playwright: page loads, globe renders, default layers appear with the seeded fixture |
@@ -145,8 +151,8 @@ watch             id, pattern, kind, min_sources    -- reserved, empty
 2. Web app with default layers, no chat. T10. **Stop: look at the globe.**
 3. Chat with `sql` + `render`. T8-T9. **Stop: try ten real questions; decide
    whether typed tools are needed (R9).**
-4. `95-news.yaml` paused, replay, **stop: pick Z and N**, unpause, first
-   push. T5-T7.
+4. Detector with `log` sink, replay, **stop: pick Z and N**, HA webhook
+   automation, `webhook` sink on, first push. T5-T7.
 5. Publish: README, `.env.example`, license, `rss` adapter as the worked
    example of adding a source.
 
@@ -155,5 +161,4 @@ watch             id, pattern, kind, min_sources    -- reserved, empty
 - Regions are country and ADM1 as GDELT codes them; no own geocoding in v1.
 - Z and N are unset until phase 4; nothing pushes before then.
 - Repo name stays `news-radar` until publishing; renaming is one command.
-- The claude-telemetry datasource and the two rules are the only changes
-  outside this repo.
+- The only change outside this repo is one HA webhook automation on the Pi.
