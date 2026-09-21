@@ -14,6 +14,7 @@ type Ev = {
   id: number; added_at: string; cameo_root: string | null; quad_class: number | null;
   actor1_name: string | null; actor2_name: string | null; geo_name: string | null; country: string;
   lat: number; lon: number; num_mentions: number; num_sources: number; url: string | null;
+  title: string | null; site: string | null;
 };
 type Daily = { day: string; mentions: number };
 
@@ -145,8 +146,9 @@ function popupHtml(p: Ev): string {
   const root = p.cameo_root ? CAMEO_ROOT[p.cameo_root] ?? p.cameo_root : "";
   const quad = p.quad_class ? QUAD_CLASS[p.quad_class] : "";
   const who = [p.actor1_name, p.actor2_name].filter(Boolean).map(esc).join(" → ") || "(unnamed actors)";
-  const host = p.url ? (() => { try { return new URL(p.url!).hostname; } catch { return p.url; } })() : "";
-  return `<div><strong>${who}</strong><br>${esc(root)}${quad ? ` · ${esc(quad)}` : ""}<br>${esc(p.geo_name)}<br>` +
+  const host = p.site || (p.url ? (() => { try { return new URL(p.url!).hostname; } catch { return p.url; } })() : "");
+  const head = p.title ? `<strong>${esc(p.title)}</strong><br><span style="color:#666">${who}</span>` : `<strong>${who}</strong>`;
+  return `<div>${head}<br>${esc(root)}${quad ? ` · ${esc(quad)}` : ""}<br>${esc(p.geo_name)}<br>` +
     `<span style="color:#666">${p.num_sources} sources · ${p.num_mentions} mentions · ${new Date(p.added_at).toUTCString().slice(5, 22)} UTC</span>` +
     (p.url ? `<br><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(host)}</a>` : "") + `</div>`;
 }

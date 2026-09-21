@@ -11,17 +11,19 @@ export async function GET(req: NextRequest) {
   const hours = clampInt(q.get("hours"), 24, 1, 168);
   const limit = clampInt(q.get("limit"), 300, 1, 2000);
   const data = await rows(
-    `SELECT id, external_id, added_at, cameo_root, quad_class, goldstein, tone,
-            actor1_name, actor2_name, geo_name, country, adm1,
-            ST_Y(geom)::float AS lat, ST_X(geom)::float AS lon,
-            num_mentions, num_sources, num_articles, url
+    `SELECT e.id, e.external_id, e.added_at, e.cameo_root, e.quad_class, e.goldstein, e.tone,
+            e.actor1_name, e.actor2_name, e.geo_name, e.country, e.adm1,
+            ST_Y(e.geom)::float AS lat, ST_X(e.geom)::float AS lon,
+            e.num_mentions, e.num_sources, e.num_articles, e.url,
+            s.title, s.site
        FROM (
          SELECT DISTINCT ON (url) *
            FROM event
-          WHERE added_at > now() - make_interval(hours => $1) AND url IS NOT NULL
+          WHERE added_at > make_interval(hours => $1) * -1 + now() AND url IS NOT NULL
           ORDER BY url, num_sources DESC, num_mentions DESC
        ) e
-      ORDER BY num_sources DESC, num_mentions DESC
+       LEFT JOIN story s ON s.url = e.url AND s.status = 'ok'
+      ORDER BY e.num_sources DESC, e.num_mentions DESC
       LIMIT $2`,
     [hours, limit],
   );

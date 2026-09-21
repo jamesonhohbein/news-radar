@@ -24,8 +24,8 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python rollup.py --full
 ```
 
-Then on a schedule: `ingest.py catchup` every 15 minutes and `rollup.py`
-hourly. `systemd/` has user units; symlink them into
+Then on a schedule: `ingest.py catchup` then `headlines.py` every 15
+minutes, and `rollup.py` hourly. `systemd/` has user units; symlink them into
 `~/.config/systemd/user/` and `systemctl --user enable --now` both timers.
 
 The map:
@@ -48,6 +48,7 @@ positron, no key). `/api/anomaly`, `/api/events/top` and
 | `attention_hourly`, `attention_daily` | Events, mentions and sources per country and per ADM1. Hourly kept 90 days, daily forever |
 | `attention_anomaly` | Each of the last 48 hours against the same hour of day over the trailing 30 days: mean, sd, z. Materialized hourly by `rollup.py` |
 | `fetch_log` | Every file loaded, with rows seen and kept. A gap here is a gap in the series |
+| `story` | Headline and site per story URL, fetched from the page after each ingest for URLs at 2+ first-window sources; failures retry 3 times, 6 h apart |
 | `source`, `alert`, `watch` | Adapter registry; what the detector has sent (later phase); reserved |
 
 Two facts about GDELT that shape everything above:
