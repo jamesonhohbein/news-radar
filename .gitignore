@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 docker-compose.override.yml
 data/
+web/test-results/
