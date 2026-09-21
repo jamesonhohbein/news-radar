@@ -9,3 +9,5 @@ ExecStart=%h/dev/homelab/news-radar/.venv/bin/python ingest.py catchup
 # Headlines for the stories just ingested (R16). Its own ExecStart so a
 # fetch failure is logged without failing the ingest that preceded it.
 ExecStart=-%h/dev/homelab/news-radar/.venv/bin/python headlines.py
+# Primary feeds (USGS, GDACS): whole-feed upsert, cheap, same cadence.
+ExecStart=-%h/dev/homelab/news-radar/.venv/bin/python ingest.py primary

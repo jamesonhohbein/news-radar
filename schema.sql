@@ -17,7 +17,15 @@ CREATE TABLE IF NOT EXISTS source (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-INSERT INTO source (kind, name) VALUES ('gdelt', 'gdelt-events')
+-- attention: whether this source's events count toward the attention series.
+-- News sources do; primary feeds (a quake, a flood alert) are ground truth,
+-- not coverage, and are shown as their own layer instead.
+ALTER TABLE source ADD COLUMN IF NOT EXISTS attention BOOLEAN NOT NULL DEFAULT true;
+
+INSERT INTO source (kind, name, attention) VALUES
+    ('gdelt', 'gdelt-events', true),
+    ('usgs',  'usgs-quakes',  false),
+    ('gdacs', 'gdacs-alerts', false)
 ON CONFLICT (name) DO NOTHING;
 
 -- One row per fetched file, so a re-run skips what it has already loaded and
@@ -64,8 +72,13 @@ CREATE TABLE IF NOT EXISTS event (
     num_sources    INT         NOT NULL,
     num_articles   INT         NOT NULL,
     url            TEXT,
+    -- Adapter-specific fields a generic column cannot hold: USGS magnitude
+    -- and depth, GDACS alert level and event type. Kept as JSON on purpose;
+    -- the agent can read it and no schema change is needed per adapter.
+    props          JSONB,
     UNIQUE (source_id, external_id)
 );
+ALTER TABLE event ADD COLUMN IF NOT EXISTS props JSONB;
 
 CREATE INDEX IF NOT EXISTS event_added_brin ON event USING brin (added_at);
 CREATE INDEX IF NOT EXISTS event_geom_gist  ON event USING gist (geom);
@@ -168,3 +181,13 @@ CREATE TABLE IF NOT EXISTS story (
     first_seen TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS story_retry ON story (fetched_at) WHERE status = 'fail';
+
+-- Country polygons (Natural Earth 110m, FIPS-keyed) for reverse geocoding
+-- sources that give a point but no country. Loaded by scripts/load_countries.py
+-- from web/public/countries.geojson so the map and the database agree.
+CREATE TABLE IF NOT EXISTS country_shape (
+    fips TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    geom geometry(MultiPolygon, 4326) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS country_shape_gist ON country_shape USING gist (geom);

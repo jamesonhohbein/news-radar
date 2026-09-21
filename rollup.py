@@ -24,6 +24,7 @@ INSERT INTO attention_hourly (region_kind, region, hour, events, mentions, sourc
 SELECT %(kind)s, {region}, date_trunc('hour', added_at), count(*), sum(num_mentions), sum(num_sources)
 FROM event
 WHERE added_at >= %(since)s AND {region} IS NOT NULL AND {region} <> ''
+  AND source_id IN (SELECT id FROM source WHERE attention)
 GROUP BY 2, 3
 ON CONFLICT (region_kind, region, hour) DO UPDATE
 SET events = EXCLUDED.events, mentions = EXCLUDED.mentions, sources = EXCLUDED.sources

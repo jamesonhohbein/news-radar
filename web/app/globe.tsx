@@ -8,6 +8,7 @@ import { CAMEO_ROOT, QUAD_CLASS } from "@/lib/cameo";
 const STYLE = process.env.NEXT_PUBLIC_MAP_STYLE ?? "https://tiles.openfreemap.org/styles/positron";
 const HOURS = 24;
 const MIN_MENTIONS = 50;
+const PRIMARY_HOURS = 72;
 
 type Region = { region: string; name: string | null; z: number; mentions: number; expected: number; peak_z: number | null };
 type Ev = {
@@ -17,8 +18,12 @@ type Ev = {
   title: string | null; site: string | null;
 };
 type Daily = { day: string; mentions: number };
+type Primary = {
+  id: number; source: string; external_id: string; added_at: string; geo_name: string | null; country: string;
+  lat: number; lon: number; url: string | null; props: { kind?: string; title?: string; alert?: string | null; mag?: number; population?: string | null };
+};
 
-declare global { interface Window { __newsradar?: { ready: boolean; layers: string[]; regions: number; events: number } } }
+declare global { interface Window { __newsradar?: { ready: boolean; layers: string[]; regions: number; events: number; primary: number } } }
 
 export default function Globe() {
   const el = useRef<HTMLDivElement>(null);
@@ -26,6 +31,7 @@ export default function Globe() {
   const namesRef = useRef<Record<string, string>>({});
   const [regions, setRegions] = useState<Region[]>([]);
   const [events, setEvents] = useState<Ev[]>([]);
+  const [primary, setPrimary] = useState<Primary[]>([]);
   const [hover, setHover] = useState<{ fips: string; name: string } | null>(null);
   const [series, setSeries] = useState<Daily[]>([]);
 
@@ -40,15 +46,18 @@ export default function Globe() {
 
     map.on("style.load", async () => {
       map.fitBounds([[-170, -58], [180, 78]], { padding: 8, duration: 0 });
-      const [countries, anomaly, top] = await Promise.all([
+      const [countries, anomaly, top, prim] = await Promise.all([
         fetch("/countries.geojson").then((r) => r.json()),
         fetch("/api/anomaly?kind=country").then((r) => r.json()),
         fetch(`/api/events/top?hours=${HOURS}&limit=300`).then((r) => r.json()),
+        fetch(`/api/events/primary?hours=${PRIMARY_HOURS}`).then((r) => r.json()),
       ]);
       const regs: Region[] = anomaly.regions;
       const evs: Ev[] = top.events;
+      const prims: Primary[] = prim.events;
       setRegions(regs);
       setEvents(evs);
+      setPrimary(prims);
       for (const r of regs) if (r.name) namesRef.current[r.region] = r.name;
       for (const f of countries.features) namesRef.current[f.properties.fips] = f.properties.name;
 
@@ -78,6 +87,29 @@ export default function Globe() {
         },
       });
 
+      // Primary feeds: quakes (size by magnitude) and non-Green GDACS alerts,
+      // in a colour of their own so ground truth is never confused with coverage.
+      map.addSource("primary", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: prims.map((e) => ({ type: "Feature", id: e.id, geometry: { type: "Point", coordinates: [e.lon, e.lat] }, properties: { ...e, mag: e.props.mag ?? null, props: JSON.stringify(e.props) } })) },
+      });
+      map.addLayer({
+        id: "primary", type: "circle", source: "primary",
+        paint: {
+          "circle-radius": ["case", ["==", ["get", "source"], "usgs"], ["interpolate", ["linear"], ["coalesce", ["get", "mag"], 4.5], 4.5, 4, 7.5, 16], 7],
+          "circle-color": ["case", ["==", ["get", "source"], "usgs"], "#b45309", "#7c3aed"],
+          "circle-opacity": 0.75, "circle-stroke-color": "#fff", "circle-stroke-width": 1,
+        },
+      });
+      map.on("click", "primary", (e: MapLayerMouseEvent) => {
+        const f = e.features?.[0]?.properties as (Omit<Primary, "props"> & { props: string }) | undefined;
+        if (!f) return;
+        const p: Primary = { ...f, props: JSON.parse(f.props) };
+        new maplibregl.Popup({ closeButton: true }).setLngLat([p.lon, p.lat]).setHTML(primaryHtml(p)).addTo(map);
+      });
+      map.on("mouseenter", "primary", () => { map.getCanvas().style.cursor = "pointer"; });
+      map.on("mouseleave", "primary", () => { map.getCanvas().style.cursor = ""; });
+
       let hovered: string | null = null;
       map.on("mousemove", "countries-fill", (e: MapLayerMouseEvent) => {
         const f = e.features?.[0];
@@ -95,7 +127,7 @@ export default function Globe() {
       map.on("mouseenter", "events", () => { map.getCanvas().style.cursor = "pointer"; });
       map.on("mouseleave", "events", () => { map.getCanvas().style.cursor = ""; });
 
-      window.__newsradar = { ready: true, layers: ["countries-fill", "events"], regions: regs.length, events: evs.length };
+      window.__newsradar = { ready: true, layers: ["countries-fill", "events", "primary"], regions: regs.length, events: evs.length, primary: prims.length };
     });
     return () => { map.remove(); mapRef.current = null; };
   }, []);
@@ -116,7 +148,8 @@ export default function Globe() {
       <div className="panel">
         <h1>news-radar</h1>
         <div className="muted">Last {HOURS} h. Tint: share of world mentions vs the region&apos;s usual share over 30 days, as a z-score, regions with {MIN_MENTIONS}+ mentions. Dots: top {events.length} stories by first-window sources.</div>
-        <div className="legend"><i /> z 1 → 5+ <b /> story</div>
+        <div className="legend"><i /> z 1 → 5+ <b /> story <b style={{ background: "#b45309" }} /> quake M4.5+ <b style={{ background: "#7c3aed" }} /> GDACS alert</div>
+        <div className="muted">{primary.length} primary events, last {PRIMARY_HOURS} h.</div>
         {hover ? (
           <>
             <table><tbody>
@@ -151,6 +184,14 @@ function popupHtml(p: Ev): string {
   return `<div>${head}<br>${esc(root)}${quad ? ` · ${esc(quad)}` : ""}<br>${esc(p.geo_name)}<br>` +
     `<span style="color:#666">${p.num_sources} sources · ${p.num_mentions} mentions · ${new Date(p.added_at).toUTCString().slice(5, 22)} UTC</span>` +
     (p.url ? `<br><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(host)}</a>` : "") + `</div>`;
+}
+
+function primaryHtml(p: Primary): string {
+  const esc = (s: string | null | undefined) => (s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
+  const when = new Date(p.added_at).toUTCString().slice(5, 22) + " UTC";
+  const line2 = p.source === "usgs" ? `M${p.props.mag} earthquake` : `${esc(p.props.alert)} ${esc(p.props.kind)} alert${p.props.population ? ` · ${esc(p.props.population)}` : ""}`;
+  return `<div><strong>${esc(p.props.title || p.geo_name)}</strong><br>${line2}<br><span style="color:#666">${esc(p.source)} · ${when}</span>` +
+    (p.url ? `<br><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.source)} page</a>` : "") + `</div>`;
 }
 
 function Spark({ data }: { data: Daily[] }) {

@@ -64,3 +64,14 @@ a day. `/api/anomaly` scores each region's share of the 24 h world total
 against its 30 daily shares. The hourly `attention_anomaly` table still uses
 counts against the same hour of day; making it share-based too is an open
 item for the detector phase.
+
+**GDACS `iscurrent` is false on live Orange droughts** (measured 2026-09-20,
+all six). Filter alerts by `datemodified`, never by that flag. Its
+`fromdate` can be in the future (forecast floods), which is why it is
+`occurred_on` and `dateadded` is `added_at`.
+
+**Natural Earth 110m has no small islands.** Guam, Tonga, the Solomons and
+Amami all geocode to empty, and two features share a FIPS code (Cyprus,
+Somalia) so the loader unions on conflict. Coordinates were rounded to 4
+places when the file was slimmed, which produced one self-intersection;
+`ST_MakeValid` on load is load-bearing.

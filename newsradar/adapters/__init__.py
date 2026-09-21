@@ -1,17 +1,28 @@
-"""Source adapters. Each module exposes:
+"""Source adapters. Two shapes, both database-free:
+
+File adapters (gdelt) publish a series of files:
 
     KIND: str                       -- matches source.kind
     list_files(since) -> list[str]  -- what exists upstream since a time
     latest() -> str                 -- the newest file
-    parse(file, blob) -> Iterable[Event]
+    fetch(file) -> bytes
+    parse(file, blob) -> Iterable[(Event | None, kept: bool)]
 
-and ingest.py does the rest: skipping files already in fetch_log, inserting
-events idempotently, recording the fetch. An adapter never touches the
-database."""
+Feed adapters (usgs, gdacs) publish one endpoint that is the current state:
+
+    KIND: str
+    SOURCE: str                     -- source.name
+    fetch() -> bytes
+    parse(blob) -> Iterable[Event]
+
+ingest.py does the rest: skipping files already in fetch_log, inserting
+events idempotently (feed adapters upsert, because a quake's magnitude and an
+alert's level get revised), recording the fetch."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -38,3 +49,4 @@ class Event:
     num_sources: int
     num_articles: int
     url: str | None
+    props: dict[str, Any] | None = None

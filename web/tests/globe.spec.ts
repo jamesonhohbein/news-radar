@@ -14,6 +14,15 @@ test("APIs return rows", async ({ request }) => {
   expect(d.series.length).toBeGreaterThan(0);
 });
 
+test("primary events carry props and no Green alerts", async ({ request }) => {
+  const p = await (await request.get("/api/events/primary?hours=168")).json();
+  expect(p.events.length).toBeGreaterThan(0);
+  for (const e of p.events) {
+    expect(["usgs", "gdacs"]).toContain(e.source);
+    expect(e.props.alert ?? "").not.toBe("Green");
+  }
+});
+
 test("clamps and rejects bad params", async ({ request }) => {
   expect((await request.get("/api/attention/daily")).status()).toBe(400);
   const e = await (await request.get("/api/events/top?limit=999999&hours=-5")).json();
@@ -28,7 +37,8 @@ test("map renders with both default layers", async ({ page }) => {
   await expect(page.locator("#map canvas")).toBeVisible();
   await page.waitForFunction(() => window.__newsradar?.ready === true, null, { timeout: 45_000 });
   const state = await page.evaluate(() => window.__newsradar!);
-  expect(state.layers).toEqual(["countries-fill", "events"]);
+  expect(state.layers).toEqual(["countries-fill", "events", "primary"]);
+  expect(state.primary).toBeGreaterThan(0);
   expect(state.regions).toBeGreaterThan(0);
   expect(state.events).toBeGreaterThan(0);
   expect(errors).toEqual([]);
