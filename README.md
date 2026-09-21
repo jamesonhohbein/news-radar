@@ -6,8 +6,8 @@ has just jumped; the chat answers questions by choosing how to render the
 answer. Acute events reach your phone; long-term trends are series over the
 same store. Nothing is scored, ranked or filtered for you.
 
-Status: **phase 2, the globe.** GDELT 2.0 Events ingest every 15 minutes,
-attention rollups per country and ADM1, and a Next.js globe showing each
+Status: **phase 2, the map.** GDELT 2.0 Events ingest every 15 minutes,
+attention rollups per country and ADM1, and a Next.js world map showing each
 country's share of the world's attention over the last 24 h against its
 30-day norm, with the top stories as points. No chat, no pushes yet.
 `specs/news-radar.md` is the design and the phase plan.
@@ -28,7 +28,7 @@ Then on a schedule: `ingest.py catchup` every 15 minutes and `rollup.py`
 hourly. `systemd/` has user units; symlink them into
 `~/.config/systemd/user/` and `systemctl --user enable --now` both timers.
 
-The globe:
+The map:
 
 ```bash
 scripts/create-reader.sh                 # read-only role; READER_PASSWORD in .env

@@ -50,8 +50,8 @@ server and drop it after. There is no in-process fallback.
 `maplibre-gl-shared.mjs` chunk, and under Next's bundling the worker was
 spawned at the *page URL*: it loaded HTML as a script, failed silently, and
 every source sat at `isSourceLoaded() === false` forever with no console
-error and no failed request. A bare grey globe with a healthy canvas is that
-bug. v5 ships one bundle with a blob worker and has globe projection.
+error and no failed request. A bare grey map with a healthy canvas is that
+bug. v5 ships one bundle with a blob worker.
 
 **`pkill -f "next-server"` kills the shell that runs it**, because the pattern
 matches its own command line. Use `pkill -f "[n]ext-server"`, or better,

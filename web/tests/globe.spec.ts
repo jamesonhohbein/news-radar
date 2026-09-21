@@ -21,7 +21,7 @@ test("clamps and rejects bad params", async ({ request }) => {
   expect(e.events.length).toBeLessThanOrEqual(2000);
 });
 
-test("globe renders with both default layers", async ({ page }) => {
+test("map renders with both default layers", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
