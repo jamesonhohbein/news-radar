@@ -126,8 +126,9 @@ watch             id, pattern, kind, min_sources    -- reserved, empty
 - One real-world event yields many GDELT events (actor pair × action ×
   location). The map aggregates by region; the event rule fires per GDELT id
   and the notification groups by `grafana_folder`, so one story is one push.
-- Measured 2026-09-20: ~580 events per 15-min file (~60 KB zipped), so
-  ~55k/day. A 30-day backfill is 2,880 files, 179 MB zipped, ~1.7M rows.
+- Measured 2026-09-20: 30 days is 2,880 files, 179 MB zipped, 2.77M
+  geolocated events (~92k/day), 1.1 GB in Postgres. Backfill ~45 min,
+  bound by DNS and latency, not size; full rollup 6 s.
 
 ## Tests
 

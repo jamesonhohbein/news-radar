@@ -107,7 +107,8 @@ def main() -> None:
             # Anomaly needs 30 days of history under it, so it is only meaningful
             # for the last 48 h even on a full run.
             counts = rollup(conn, since, anomaly=False)
-            counts.update(rollup(conn, datetime.now(timezone.utc) - timedelta(hours=48)))
+            recent = rollup(conn, datetime.now(timezone.utc) - timedelta(hours=48))
+            counts["anomaly"] = recent["anomaly"]
         else:
             counts = rollup(conn, datetime.now(timezone.utc) - timedelta(hours=48))
         if not args.no_prune:
