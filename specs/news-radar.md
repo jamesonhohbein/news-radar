@@ -44,10 +44,15 @@ is a lens on a complete store, applied on demand.
 
 ### Surface
 
-- **R7 Next.js app** (`web/`): MapLibre GL globe projection, deck.gl layers,
-  Vega-Lite charts, one page. Default view without any chat: last-24 h
-  attention anomaly as a heat layer over countries, top events by
-  `NumSources` as points, a 30-day attention sparkline for the hovered region.
+- **R7 Next.js app** (`web/`): MapLibre GL 5 globe projection with native
+  fill and circle layers (deck.gl only when a layer type needs it; its
+  overlay on the globe projection is unproven), Vega-Lite charts from phase
+  3, one page. Default view without any chat: last-24 h attention as a
+  country choropleth by share-of-world z-score (built 2026-09-20; counts were
+  tried first and read as "everything is red" on a peak-hour basis and
+  "everything is below baseline" on a Sunday), top stories by `NumSources`
+  as points (one per article URL), a 30-day daily sparkline and expected-vs-
+  actual for the hovered region. Served on `127.0.0.1:3087` and `news.lan`.
 - **R8 Chat drives rendering.** `/api/chat` runs Claude with two tools:
   `sql` (read-only role, LIMIT enforced, schema in the system prompt) and
   `render`, whose argument is typed JSON the client draws:
@@ -143,7 +148,7 @@ watch             id, pattern, kind, min_sources    -- reserved, empty
 | T7 | R12 | `replay.py` on synthetic rows matches T5's hand count; with Z or N unset the detector sends nothing |
 | T8 | R8 | `render` payloads validate against the JSON schema; an invalid payload is rejected before reaching the client |
 | T9 | R8 | `sql` tool refuses non-SELECT and enforces LIMIT; a 20 s query is cut at 10 s |
-| T10 | R7 | Playwright: page loads, globe renders, default layers appear with the seeded fixture |
+| T10 | R7 | Playwright against the running service and live database: APIs return rows, params clamp, globe renders with both layers populated and no page errors |
 
 ## Phases and stop points
 
@@ -160,6 +165,11 @@ watch             id, pattern, kind, min_sources    -- reserved, empty
 ## Assumptions stated
 
 - Regions are country and ADM1 as GDELT codes them; no own geocoding in v1.
+  Display names come from GDELT's own country-level labels (`region_name`,
+  refreshed by rollup) with Natural Earth 110m as the polygon source; a few
+  microstates have a name but no polygon and appear only in the panel.
+- The hourly detector signal still scores counts, not share (see CLAUDE.md);
+  revisit before picking Z in phase 4.
 - Z and N are unset until phase 4; nothing pushes before then.
 - Repo name stays `news-radar` until publishing; renaming is one command.
 - The only change outside this repo is one HA webhook automation on the Pi.

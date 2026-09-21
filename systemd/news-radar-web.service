@@ -1,0 +1,23 @@
+[Unit]
+Description=news-radar: globe and API (Next.js) on 127.0.0.1:3087
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/dev/homelab/news-radar/web
+# Loopback only; nginx in ~/Software/ingress proxies news.lan here. 3080-3086
+# belong to other boards on this host; check `ss -ltn` before moving.
+Environment=HOSTNAME=127.0.0.1
+Environment=PORT=3087
+Environment=NODE_ENV=production
+# READER_PASSWORD and POSTGRES_PORT from the repo's gitignored .env.
+EnvironmentFile=%h/dev/homelab/news-radar/.env
+ExecStart=/usr/bin/npm run start
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

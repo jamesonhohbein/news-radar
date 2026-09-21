@@ -1,0 +1,17 @@
+:root { color-scheme: light dark; --fg: #111; --bg: #fff; --muted: #666; --panel: rgba(255,255,255,.92); }
+@media (prefers-color-scheme: dark) { :root { --fg: #eee; --bg: #111; --muted: #999; --panel: rgba(20,20,20,.92); } }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; font: 14px/1.4 system-ui, sans-serif; color: var(--fg); background: var(--bg); }
+#map { position: fixed; inset: 0; }
+.panel { position: fixed; top: 12px; left: 12px; width: 300px; max-height: calc(100% - 24px); overflow: auto;
+  padding: 10px 12px; background: var(--panel); border: 1px solid rgba(128,128,128,.3); border-radius: 6px; }
+.panel h1 { font-size: 15px; margin: 0 0 4px; }
+.panel .muted { color: var(--muted); font-size: 12px; }
+.panel table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 12px; }
+.panel td { padding: 1px 0; vertical-align: top; }
+.panel td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.legend { display: flex; gap: 6px; align-items: center; margin-top: 6px; font-size: 11px; }
+.legend i { display: inline-block; width: 40px; height: 8px; background: linear-gradient(90deg, rgba(200,30,30,0), rgba(200,30,30,.85)); }
+.legend b { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #1d4ed8; }
+.maplibregl-popup-content { color: #111; font-size: 12px; max-width: 280px; }
+.maplibregl-popup-content a { word-break: break-all; }

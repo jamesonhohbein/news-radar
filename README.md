@@ -6,10 +6,11 @@ has just jumped; the chat answers questions by choosing how to render the
 answer. Acute events reach your phone; long-term trends are series over the
 same store. Nothing is scored, ranked or filtered for you.
 
-Status: **phase 1, data layer.** GDELT 2.0 Events ingest every 15 minutes,
-attention rollups per country and ADM1, hourly anomaly against a 30-day
-same-hour baseline. No map, no chat, no pushes yet. `specs/news-radar.md`
-is the design and the phase plan.
+Status: **phase 2, the globe.** GDELT 2.0 Events ingest every 15 minutes,
+attention rollups per country and ADM1, and a Next.js globe showing each
+country's share of the world's attention over the last 24 h against its
+30-day norm, with the top stories as points. No chat, no pushes yet.
+`specs/news-radar.md` is the design and the phase plan.
 
 ## Run it
 
@@ -26,6 +27,18 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 Then on a schedule: `ingest.py catchup` every 15 minutes and `rollup.py`
 hourly. `systemd/` has user units; symlink them into
 `~/.config/systemd/user/` and `systemctl --user enable --now` both timers.
+
+The globe:
+
+```bash
+scripts/create-reader.sh                 # read-only role; READER_PASSWORD in .env
+cd web && npm install && npm run build
+PORT=3087 HOSTNAME=127.0.0.1 npm run start   # or systemd/news-radar-web.service
+```
+
+`NEXT_PUBLIC_MAP_STYLE` overrides the basemap (default: OpenFreeMap
+positron, no key). `/api/anomaly`, `/api/events/top` and
+`/api/attention/daily` are the page's only data paths and are plain JSON.
 
 ## What is in the database
 
@@ -54,7 +67,8 @@ Two facts about GDELT that shape everything above:
 
 They create and drop a scratch database on the running server and apply
 `schema.sql` to it, so what is tested is the production schema and the
-production SQL. Test IDs (T1-T4 so far) trace to requirements in the spec.
+production SQL. `cd web && npx playwright test` runs T10 against the running
+service and the live database. Test IDs trace to requirements in the spec.
 
 ## Adding a source
 

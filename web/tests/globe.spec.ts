@@ -1,0 +1,36 @@
+// T10 (R7): the page loads, the globe renders, and both default layers are
+// populated from the live database.
+import { expect, test } from "@playwright/test";
+
+test("APIs return rows", async ({ request }) => {
+  const a = await (await request.get("/api/anomaly")).json();
+  expect(a.regions.length).toBeGreaterThan(0);
+  expect(a.regions[0]).toHaveProperty("z");
+  expect(a.regions[0]).toHaveProperty("expected");
+  const e = await (await request.get("/api/events/top?hours=24&limit=10")).json();
+  expect(e.events.length).toBe(10);
+  expect(new Set(e.events.map((x: { url: string }) => x.url)).size).toBe(10);
+  const d = await (await request.get(`/api/attention/daily?region=${e.events[0].country}&days=30`)).json();
+  expect(d.series.length).toBeGreaterThan(0);
+});
+
+test("clamps and rejects bad params", async ({ request }) => {
+  expect((await request.get("/api/attention/daily")).status()).toBe(400);
+  const e = await (await request.get("/api/events/top?limit=999999&hours=-5")).json();
+  expect(e.hours).toBe(1);
+  expect(e.events.length).toBeLessThanOrEqual(2000);
+});
+
+test("globe renders with both default layers", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/");
+  await expect(page.locator("#map canvas")).toBeVisible();
+  await page.waitForFunction(() => window.__newsradar?.ready === true, null, { timeout: 45_000 });
+  const state = await page.evaluate(() => window.__newsradar!);
+  expect(state.layers).toEqual(["countries-fill", "events"]);
+  expect(state.regions).toBeGreaterThan(0);
+  expect(state.events).toBeGreaterThan(0);
+  expect(errors).toEqual([]);
+  await expect(page.locator(".panel h1")).toHaveText("news-radar");
+});
