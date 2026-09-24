@@ -330,3 +330,39 @@ CREATE TABLE IF NOT EXISTS theme_hourly (
     PRIMARY KEY (region, theme, hour)
 );
 CREATE INDEX IF NOT EXISTS theme_hourly_hour ON theme_hourly (hour);
+
+-- NWS alerts (R24). A later message's references mark what it supersedes.
+ALTER TABLE event ADD COLUMN IF NOT EXISTS superseded_by TEXT;
+INSERT INTO source (kind, name, attention) VALUES ('nws', 'nws-alerts', false)
+ON CONFLICT (name) DO NOTHING;
+
+-- NWS zone polygons, fetched from api.weather.gov on first reference and
+-- refetched after 90 days; geom NULL for a zone the API has no shape for.
+CREATE TABLE IF NOT EXISTS nws_zone (
+    url        TEXT PRIMARY KEY,
+    code       TEXT NOT NULL,
+    kind       TEXT NOT NULL,
+    name       TEXT,
+    geom       geometry(MultiPolygon, 4326),
+    fetched_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS nws_zone_gist ON nws_zone USING gist (geom);
+
+-- What the map's ground-truth layer draws now: one rule per source kind, so
+-- each adapter adds its own clause here. The store keeps everything; this is
+-- only what is current and above each source's noise floor.
+DROP VIEW IF EXISTS primary_live;
+CREATE VIEW primary_live AS
+SELECT e.id, s.kind AS source, e.external_id, e.added_at, e.occurred_on, e.geo_name, e.country,
+       ST_Y(e.geom)::float AS lat, ST_X(e.geom)::float AS lon, e.url, e.props
+FROM event e JOIN source s ON s.id = e.source_id
+WHERE NOT s.attention AND CASE s.kind
+    WHEN 'usgs'  THEN e.added_at > now() - interval '72 hours'
+    -- GDACS iscurrent is false on live Orange droughts; modified is the filter.
+    WHEN 'gdacs' THEN coalesce(e.props->>'alert', '') <> 'Green'
+                      AND (e.props->>'modified')::timestamptz > now() - interval '30 days'
+    -- Severe and Extreme only: Small Craft and Gale advisories are most of the feed.
+    WHEN 'nws'   THEN e.superseded_by IS NULL
+                      AND (e.props->>'expires')::timestamptz > now()
+                      AND e.props->>'severity' IN ('Severe', 'Extreme')
+    ELSE false END;

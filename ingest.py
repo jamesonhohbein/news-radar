@@ -23,13 +23,13 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 from newsradar import store
-from newsradar.adapters import gdacs, gdelt, usgs
+from newsradar.adapters import gdacs, gdelt, nws, usgs
 from newsradar.db import connect
 
 SOURCE = "gdelt-events"
 MENTIONS_SOURCE = "gdelt-mentions"
 GKG_SOURCE = "gdelt-gkg"
-FEEDS = (usgs, gdacs)
+FEEDS = (usgs, gdacs, nws)
 
 
 def load_files(conn, sid: int, files: list[str], workers: int = 4) -> tuple[int, int]:
@@ -155,7 +155,13 @@ def load_feeds(conn) -> list[str]:
             continue
         events = list(mod.parse(blob))
         try:
+            # Optional hooks: resolve places events that arrive without a point
+            # (NWS zones); after_insert links rows to each other (NWS supersession).
+            if hasattr(mod, "resolve"):
+                events = mod.resolve(conn, events)
             n = store.insert_events(conn, sid, events, update=True)
+            if hasattr(mod, "after_insert"):
+                mod.after_insert(conn, sid)
             geocoded = store.reverse_geocode(conn, sid)
             store.log_fetch(conn, sid, f"{mod.KIND}:{datetime.now(timezone.utc):%Y%m%d%H%M}", len(events), len(events))
             conn.commit()

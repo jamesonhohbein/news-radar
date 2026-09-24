@@ -1,0 +1,72 @@
+{
+ "https://api.weather.gov/zones/county/WAC073": {
+  "type": "Feature",
+  "geometry": {
+   "type": "Polygon",
+   "coordinates": [
+    [
+     [
+      -123.0,
+      48.6
+     ],
+     [
+      -121.0,
+      48.6
+     ],
+     [
+      -121.0,
+      49.0
+     ],
+     [
+      -123.0,
+      49.0
+     ],
+     [
+      -123.0,
+      48.6
+     ]
+    ]
+   ]
+  },
+  "properties": {
+   "id": "WAC073",
+   "type": "county",
+   "name": "WAC073"
+  }
+ },
+ "https://api.weather.gov/zones/forecast/WAZ503": {
+  "type": "Feature",
+  "geometry": {
+   "type": "Polygon",
+   "coordinates": [
+    [
+     [
+      -122.8,
+      48.7
+     ],
+     [
+      -122.2,
+      48.7
+     ],
+     [
+      -122.2,
+      49.0
+     ],
+     [
+      -122.8,
+      49.0
+     ],
+     [
+      -122.8,
+      48.7
+     ]
+    ]
+   ]
+  },
+  "properties": {
+   "id": "WAZ503",
+   "type": "public",
+   "name": "WAZ503"
+  }
+ }
+}
