@@ -24,13 +24,13 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 from newsradar import store
-from newsradar.adapters import firms, gdacs, gdelt, nws, tsunami, usgs, volcano
+from newsradar.adapters import firms, gdacs, gdelt, ioda, nws, tsunami, usgs, volcano
 from newsradar.db import connect
 
 SOURCE = "gdelt-events"
 MENTIONS_SOURCE = "gdelt-mentions"
 GKG_SOURCE = "gdelt-gkg"
-FEEDS = (usgs, gdacs, nws, tsunami, volcano, firms)
+FEEDS = (usgs, gdacs, nws, tsunami, volcano, firms, ioda)
 
 
 def load_files(conn, sid: int, files: list[str], workers: int = 4) -> tuple[int, int]:

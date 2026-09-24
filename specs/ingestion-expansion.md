@@ -124,8 +124,11 @@ drawn as their own layer. Revisions update `props` in place unless noted.
   are most of the volume and dropped. No ids: key
   `(datasource, entity fqid, start)`, revised in place as duration grows.
   No points: regions join Natural Earth admin-1 by `ne_region_id`, and the
-  layer draws the polygon rather than a dot. The data licence is
-  unpublished, so the README says so and nothing republishes it.
+  layer draws the polygon rather than a dot. Responses say "Copyright Georgia Tech Research Corporation. All
+  Rights Reserved", so the README says so and nothing republishes it.
+  Built 2026-09-24 with two changes: outages sit at their country's point
+  until admin-1 shapes exist, and the query window is 6 h because a 7-day
+  window came back truncated to old starts.
 - **R29 Cloudflare Radar outages.** `radar/annotations/outages`, needs a
   free account token with Radar Read, set in `.env`. Without the token the
   adapter is disabled and logs once. Data is CC BY-NC 4.0; the README says

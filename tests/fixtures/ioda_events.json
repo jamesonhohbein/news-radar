@@ -1,0 +1,80 @@
+{
+ "type": "outages.events",
+ "metadata": {
+  "requestTime": "2026-09-24T07:14:50+00:00",
+  "responseTime": "2026-09-24T07:14:59+00:00"
+ },
+ "requestParameters": {
+  "from": "1790147690",
+  "until": "1790234090",
+  "datasource": null,
+  "includeAlerts": false,
+  "format": "codf",
+  "limit": 2000,
+  "page": null,
+  "relatedTo": null,
+  "entityType": null,
+  "entityCode": null,
+  "orderBy": null,
+  "overall": false,
+  "ignoreMethods": null,
+  "extendWindow": 1209600
+ },
+ "error": null,
+ "perf": null,
+ "data": [
+  {
+   "location": "asn/31877",
+   "start": 1788942300,
+   "duration": 1291790,
+   "uncertainty": null,
+   "method": "median",
+   "datasource": "bgp",
+   "status": 0,
+   "fraction": null,
+   "score": 128810.96866096866,
+   "location_name": "AS31877 (GPW)",
+   "overlaps_window": true
+  },
+  {
+   "location": "region/3332",
+   "start": 1789764000,
+   "duration": 470090,
+   "uncertainty": null,
+   "method": "median",
+   "datasource": "merit-nt",
+   "status": 0,
+   "fraction": null,
+   "score": 783425.391953853,
+   "location_name": "Coimbra",
+   "overlaps_window": true
+  },
+  {
+   "location": "country/LT",
+   "start": 1790028000,
+   "duration": 206090,
+   "uncertainty": null,
+   "method": "sarima",
+   "datasource": "gtr",
+   "status": 0,
+   "fraction": null,
+   "score": 113647.8884318832,
+   "location_name": "Lithuania",
+   "overlaps_window": true
+  },
+  {
+   "location": "country/ZZ",
+   "start": 1788942300,
+   "duration": 1291790,
+   "uncertainty": null,
+   "method": "median",
+   "datasource": "bgp",
+   "status": 0,
+   "fraction": null,
+   "score": 128810.96866096866,
+   "location_name": "Nowhere",
+   "overlaps_window": true
+  }
+ ],
+ "copyright": "This data is Copyright (c) 2021-2025 Georgia Tech Research Corporation. All Rights Reserved."
+}
