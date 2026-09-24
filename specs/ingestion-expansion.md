@@ -1,6 +1,6 @@
 # Ingestion expansion
 
-Status: proposed 2026-09-24, not approved. Extends `specs/news-radar.md`;
+Status: approved 2026-09-24. Extends `specs/news-radar.md`;
 requirement and test numbers continue from it.
 
 ## Why
@@ -147,8 +147,8 @@ detection content-blind and keeps third-party text out of the store.
   display. Text is never stored. A delete event removes its URI.
   Ambiguous names ("Georgia", "Jordan", "Paris") are kept, because the
   detector scores each place against its own baseline, so a name that is
-  always noisy only fires when it is unusually noisy. The GeoNames licence
-  is CC BY 4.0, credited in the README. No model call, local or remote.
+  always noisy only fires when it is unusually noisy. The gazetteer reloads monthly from GeoNames' daily-updated dump. The
+  GeoNames licence is CC BY 4.0, credited in the README. No model call, local or remote.
 
 ### Operations
 
@@ -158,6 +158,13 @@ detection content-blind and keeps third-party text out of the store.
   unit is already covered by failed-systemd-unit alerting on the incident
   path; a source that runs but returns nothing shows in `source_health` and
   on the map's source list. Neither path is a new notifier.
+- **R34 One skill per source.** Each source has a skill at
+  `.claude/skills/<source>/SKILL.md`, committed with its adapter: how to
+  reach the source directly (endpoint, auth, format, ids, revisions,
+  licence, measured volume, traps) and how to read our stored copy (tables,
+  a working SQL query, freshness). The adapter code stays the authority; the
+  skill cites its constants rather than restating logic. GDELT, USGS and
+  GDACS get theirs now, since they are already live.
 - **R33 Bandwidth is stated.** Steady state is about 7 GB/day down
   (Wikipedia ~5, Bluesky ~1 to 2 compressed, GKG ~0.35, the rest small),
   about 210 GB/month.
@@ -206,16 +213,21 @@ event             + superseded_by (NWS chains)
 | T27 | R29 | With no token the adapter is disabled and inserts nothing; with a fixture response it parses cause and country |
 | T28 | R30 | Stream fixture: non-Wikipedia and non-ns0 events dropped; hourly counts and distinct editors correct; resume id stored |
 | T29 | R31 | Gazetteer match on fixture posts in two languages; a delete removes the URI; no post text reaches the database |
+| T31 | R34 | Every adapter module has `.claude/skills/<KIND>/SKILL.md` named for its `KIND`, and the adapter's endpoint constant appears verbatim in it |
 | T30 | R32 | A source with no rows for 3 of its intervals shows stale in `source_health` |
 
 ## Phases and stop points
 
-1. Mentions (R18 to R20), syndication collapse (R21), GKG (R22), 30-day
-   Mentions backfill. T17 to T21. **Stop: 7-day measured sizes, confirm
+1. Skills for the three live sources (R34), `source_health` (R32) so the
+   new sources arrive with a health view, then Mentions (R18 to R20),
+   syndication collapse (R21), GKG (R22), 30-day Mentions backfill. T17 to
+   T21, T30, T31. **Stop: 7-day measured sizes, confirm
    retention (R23).**
 2. Ground truth R24 to R29, one adapter per commit. T22 to T27. Radar lands
    disabled until a token is in `.env`.
-3. Chatter R30 and R31, then `source_health` (R32). T28 to T30.
+3. Chatter R30 and R31. T28, T29.
+
+Every adapter commit from phase 1 on carries its skill (R34).
 
 ## Assumptions stated
 
