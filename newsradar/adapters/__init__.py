@@ -14,6 +14,8 @@ Feed adapters (usgs, gdacs) publish one endpoint that is the current state:
     SOURCE: str                     -- source.name
     fetch() -> bytes
     parse(blob) -> Iterable[Event]
+    resolve(conn, events) -> list[Event]   -- optional: place events parse left without a point
+    after_insert(conn, sid)               -- optional: link rows to each other after upsert
 
 ingest.py does the rest: skipping files already in fetch_log, inserting
 events idempotently (feed adapters upsert, because a quake's magnitude and an

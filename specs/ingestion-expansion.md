@@ -90,8 +90,10 @@ drawn as their own layer. Revisions update `props` in place unless noted.
 - **R24 NWS alerts.** `https://api.weather.gov/alerts/active`, User-Agent
   required (empty UA returns 403), public domain. Measured: 475 active, 93%
   with null geometry, only UGC and SAME zone codes. So the adapter joins a
-  local `nws_zone(code, kind, geom)` table of forecast, county and fire
-  zones, loaded from the NWS GIS shapefiles and refreshed quarterly. An
+  local `nws_zone(url, code, kind, name, geom)` cache: a zone's polygon is
+  fetched from `api.weather.gov/zones/...` the first time an alert names
+  it and refetched after 90 days (changed at build, 2026-09-24: the
+  shapefile route needs GIS tooling on every self-hosted install). An
   Update is a new id with `references[]`; the store keeps the chain and
   marks superseded rows, it does not overwrite. US only, which is fine:
   this is ground truth where it exists.
@@ -243,5 +245,3 @@ Every adapter commit from phase 1 on carries its skill (R34).
 - IODA is ingested for personal use with its licence unverified.
 - Cloudflare Radar needs you to create a free account token; until then
   its adapter is off.
-- The NWS zone shapefile URLs are not yet verified; phase 2 verifies them
-  first.

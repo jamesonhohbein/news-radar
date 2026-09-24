@@ -1,0 +1,99 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": null,
+   "properties": {
+    "@id": "https://api.weather.gov/alerts/urn:oid:A",
+    "id": "urn:oid:A",
+    "areaDesc": "Whatcom; Western Whatcom",
+    "sent": "2026-09-24T02:00:00-07:00",
+    "effective": "2026-09-24T02:00:00-07:00",
+    "onset": "2026-09-24T06:00:00-07:00",
+    "expires": "2099-01-01T00:00:00-08:00",
+    "ends": null,
+    "severity": "Severe",
+    "urgency": "Expected",
+    "certainty": "Likely",
+    "event": "High Wind Warning",
+    "messageType": "Alert",
+    "headline": "High Wind Warning for Whatcom",
+    "senderName": "NWS Seattle WA",
+    "geocode": {
+     "UGC": [
+      "WAC073",
+      "WAZ503"
+     ]
+    },
+    "affectedZones": [
+     "https://api.weather.gov/zones/county/WAC073",
+     "https://api.weather.gov/zones/forecast/WAZ503"
+    ],
+    "references": []
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -122.6,
+       48.7
+      ],
+      [
+       -122.3,
+       48.7
+      ],
+      [
+       -122.3,
+       48.9
+      ],
+      [
+       -122.6,
+       48.9
+      ],
+      [
+       -122.6,
+       48.7
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "@id": "https://api.weather.gov/alerts/urn:oid:B",
+    "id": "urn:oid:B",
+    "areaDesc": "Whatcom",
+    "sent": "2026-09-24T05:00:00-07:00",
+    "effective": "2026-09-24T05:00:00-07:00",
+    "onset": null,
+    "expires": "2099-01-01T00:00:00-08:00",
+    "ends": null,
+    "severity": "Severe",
+    "urgency": "Immediate",
+    "certainty": "Observed",
+    "event": "High Wind Warning",
+    "messageType": "Update",
+    "headline": "Updated",
+    "senderName": "NWS Seattle WA",
+    "geocode": {
+     "UGC": [
+      "WAC073"
+     ]
+    },
+    "affectedZones": [
+     "https://api.weather.gov/zones/county/WAC073"
+    ],
+    "references": [
+     {
+      "identifier": "urn:oid:A",
+      "sender": "w-nws.webmaster@noaa.gov",
+      "sent": "2026-09-24T02:00:00-07:00"
+     }
+    ]
+   }
+  }
+ ]
+}
