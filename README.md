@@ -29,7 +29,8 @@ catchup`, `headlines.py` and `ingest.py primary` every 15 minutes, and
 `rollup.py` hourly. `systemd/` has user units; symlink them into
 `~/.config/systemd/user/` and `systemctl --user enable --now` the three
 timers (`ingest`, `rollup`, and `fast`, which polls tsunami bulletins every
-5 minutes).
+5 minutes). `news-radar-wiki.service` is a long-running consumer of
+Wikipedia's edit stream; enable it the same way.
 
 The map:
 
@@ -95,6 +96,7 @@ Apache-2.0.
 The code is Apache-2.0; the data each adapter pulls keeps its source's
 terms. GDELT, USGS, NWS, NOAA tsunami centres and NASA FIRMS are open or
 public domain (FIRMS asks for citation). GeoNames (country codes) is
-CC BY 4.0. **IODA is "Copyright Georgia Tech Research Corporation. All
+CC BY 4.0. Wikipedia content is CC BY-SA, but only edit counts are stored.
+**IODA is "Copyright Georgia Tech Research Corporation. All
 Rights Reserved"**: fine to read for your own instance, not to republish.
 Cloudflare Radar (optional, needs a token) is CC BY-NC 4.0.

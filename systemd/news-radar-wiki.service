@@ -1,0 +1,13 @@
+[Unit]
+Description=news-radar: Wikipedia edit stream consumer (counts only)
+After=docker.service network-online.target
+
+[Service]
+WorkingDirectory=%h/dev/homelab/news-radar
+ExecStart=%h/dev/homelab/news-radar/.venv/bin/python wiki_stream.py
+# Resumes from stream_cursor, so a restart loses nothing Wikimedia still holds.
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

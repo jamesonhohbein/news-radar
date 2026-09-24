@@ -35,7 +35,7 @@ class DBCase(unittest.TestCase):
             c.execute(f"DROP DATABASE IF EXISTS {cls.dbname}")
 
     def setUp(self):
-        self.conn.execute("TRUNCATE event, fetch_log, attention_hourly, attention_daily, attention_anomaly, alert, mention, mention_hourly, gkg_article, gkg_location, theme_daily, theme_hourly, firms_detection, fire")
+        self.conn.execute("TRUNCATE event, fetch_log, attention_hourly, attention_daily, attention_anomaly, alert, mention, mention_hourly, gkg_article, gkg_location, theme_daily, theme_hourly, firms_detection, fire, wiki_edit, wiki_activity, wiki_page, stream_cursor")
         self.conn.commit()
 
     def one(self, sql, params=None):

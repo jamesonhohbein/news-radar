@@ -48,6 +48,16 @@ ON CONFLICT (region_kind, region, hour) DO UPDATE
 SET mentions = EXCLUDED.mentions, sources = EXCLUDED.sources
 """
 
+_WIKI_ACTIVITY = """
+INSERT INTO wiki_activity (wiki, title, hour, edits, editors, created)
+SELECT wiki, title, date_trunc('hour', at), count(*), count(DISTINCT user_hash) FILTER (WHERE NOT bot), bool_or(created)
+FROM wiki_edit
+WHERE at >= %(since)s
+GROUP BY 1, 2, 3
+ON CONFLICT (wiki, title, hour) DO UPDATE
+SET edits = EXCLUDED.edits, editors = EXCLUDED.editors, created = EXCLUDED.created
+"""
+
 _MENTION_HOURLY = """
 INSERT INTO mention_hourly (event_id, hour, mentions, sources)
 SELECT event_id, date_trunc('hour', mentioned_at), count(*), count(DISTINCT source_name)
@@ -128,6 +138,12 @@ def rollup(conn, since: datetime, until: datetime | None = None, anomaly: bool =
                 conn.execute(_HOURLY_MENTIONS.format(region=region), {"kind": kind, "since": msince})
         if msince:
             out["mention_hourly"] = conn.execute(_MENTION_HOURLY, {"since": msince}).rowcount
+        # The wiki buffer is 72 h; roll only whole hours it still covers.
+        wfirst = conn.execute("""SELECT CASE WHEN min(at) = date_trunc('hour', min(at)) THEN min(at)
+                                             ELSE date_trunc('hour', min(at)) + interval '1 hour' END
+                                 FROM wiki_edit""").fetchone()[0]
+        if wfirst:
+            out["wiki_activity"] = conn.execute(_WIKI_ACTIVITY, {"since": max(since, wfirst)}).rowcount
         out["daily"] = conn.execute(_DAILY, {"since": since}).rowcount
         if anomaly:
             out["anomaly"] = conn.execute(_ANOMALY, {"since": since, "until": until}).rowcount
@@ -143,6 +159,10 @@ def prune(conn) -> dict[str, int]:
                                   (now - timedelta(days=RETAIN_EVENT_DAYS),)).rowcount,
             "mention": conn.execute("DELETE FROM mention WHERE mentioned_at < %s",
                                     (now - timedelta(hours=RETAIN_MENTION_HOURS),)).rowcount,
+            "wiki_edit": conn.execute("DELETE FROM wiki_edit WHERE at < %s",
+                                      (now - timedelta(hours=RETAIN_MENTION_HOURS),)).rowcount,
+            "wiki_activity": conn.execute("DELETE FROM wiki_activity WHERE hour < %s",
+                                          (now - timedelta(days=RETAIN_EVENT_DAYS),)).rowcount,
             "firms_detection": conn.execute("DELETE FROM firms_detection WHERE acq_at < %s",
                                             (now - timedelta(days=RETAIN_GKG_DAYS),)).rowcount,
             "gkg_article": conn.execute("DELETE FROM gkg_article WHERE added_at < %s",   # cascades to gkg_location

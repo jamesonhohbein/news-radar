@@ -454,3 +454,60 @@ CREATE TABLE IF NOT EXISTS ioda_region (
 -- without a token does not show it stale; enable after setting the token.
 INSERT INTO source (kind, name, attention, expect_every, enabled) VALUES ('radar', 'cloudflare-radar', false, '1 day', false)
 ON CONFLICT (name) DO NOTHING;
+
+-- Stream consumers' resume points (R30, R31), committed with their rows.
+CREATE TABLE IF NOT EXISTS stream_cursor (
+    name       TEXT PRIMARY KEY,
+    cursor     TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);
+
+-- Wikipedia edits (R30): a 72 h raw buffer, counts only. user_hash is a
+-- truncated SHA-256 of the username, for distinct-editor counts.
+INSERT INTO source (kind, name, attention, expect_every) VALUES ('wikipedia', 'wikipedia-edits', false, '1 hour')
+ON CONFLICT (name) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS wiki_edit (
+    wiki      TEXT        NOT NULL,
+    server    TEXT        NOT NULL,
+    title     TEXT        NOT NULL,
+    at        TIMESTAMPTZ NOT NULL,
+    user_hash TEXT        NOT NULL,
+    bot       BOOLEAN     NOT NULL,
+    created   BOOLEAN     NOT NULL,
+    rev       BIGINT      NOT NULL,
+    PRIMARY KEY (wiki, rev)
+);
+CREATE INDEX IF NOT EXISTS wiki_edit_at ON wiki_edit (at);
+CREATE INDEX IF NOT EXISTS wiki_edit_page ON wiki_edit (wiki, title, at);
+
+-- Per page per hour, rolled from the buffer; editors are distinct humans.
+CREATE TABLE IF NOT EXISTS wiki_activity (
+    wiki    TEXT        NOT NULL,
+    title   TEXT        NOT NULL,
+    hour    TIMESTAMPTZ NOT NULL,
+    edits   INT         NOT NULL,
+    editors INT         NOT NULL,
+    created BOOLEAN     NOT NULL,
+    PRIMARY KEY (wiki, title, hour)
+);
+CREATE INDEX IF NOT EXISTS wiki_activity_hour ON wiki_activity (hour);
+
+-- GeoData coordinates for pages that got busy; geom NULL = checked, none.
+CREATE TABLE IF NOT EXISTS wiki_page (
+    wiki       TEXT NOT NULL,
+    title      TEXT NOT NULL,
+    geom       geometry(Point, 4326),
+    country    TEXT,
+    checked_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (wiki, title)
+);
+CREATE INDEX IF NOT EXISTS wiki_page_geom ON wiki_page USING gist (geom) WHERE geom IS NOT NULL;
+
+-- The rate series (R30): geotagged pages' human editors per country per hour.
+CREATE OR REPLACE VIEW wiki_geo_hourly AS
+SELECT p.country, a.hour, count(*) AS pages, sum(a.editors) AS editors, sum(a.edits) AS edits,
+       count(*) FILTER (WHERE a.created) AS created
+FROM wiki_activity a JOIN wiki_page p ON p.wiki = a.wiki AND p.title = a.title
+WHERE p.geom IS NOT NULL AND p.country <> ''
+GROUP BY p.country, a.hour;
