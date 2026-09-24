@@ -374,6 +374,10 @@ WHERE NOT s.attention AND CASE s.kind
     -- 2026-09-24, not the ~47k small burns a day produces (20+ gave 1,071).
     WHEN 'firms' THEN (e.props->>'detections')::int >= 50
                       AND (e.props->>'last_seen')::timestamptz > now() - interval '24 hours'
+    -- Started in the last 48 h and still going or ended in the last 3 h.
+    -- Multi-day region "outages" are chronic measurement conditions.
+    WHEN 'ioda' THEN (e.props->>'end')::timestamptz > now() - interval '3 hours'
+                      AND e.added_at > now() - interval '48 hours'
     ELSE false END;
 
 -- Tsunami bulletins (R25). Polled every 5 min by news-radar-fast.timer.
@@ -419,3 +423,27 @@ CREATE TABLE IF NOT EXISTS fire (
 );
 CREATE INDEX IF NOT EXISTS fire_hull ON fire USING gist (hull);
 CREATE INDEX IF NOT EXISTS fire_last_seen ON fire (last_seen);
+
+-- ISO to FIPS (GDELT codes countries in FIPS 10-4; most other sources use
+-- ISO). From GeoNames countryInfo.txt, CC BY 4.0, via
+-- scripts/load_country_codes.py.
+CREATE TABLE IF NOT EXISTS country_code (
+    iso2 TEXT PRIMARY KEY,
+    iso3 TEXT NOT NULL,
+    fips TEXT,
+    name TEXT NOT NULL
+);
+
+-- IODA internet outages (R28). All rights reserved by Georgia Tech Research
+-- Corporation: ingested for personal use, never republished.
+INSERT INTO source (kind, name, attention) VALUES ('ioda', 'ioda-outages', false)
+ON CONFLICT (name) DO NOTHING;
+
+-- IODA region entity -> country, looked up once per region code.
+CREATE TABLE IF NOT EXISTS ioda_region (
+    code         TEXT PRIMARY KEY,
+    name         TEXT,
+    country_iso  TEXT,
+    ne_region_id TEXT,
+    fetched_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);

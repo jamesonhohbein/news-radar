@@ -24,7 +24,7 @@ type Ev = {
 type Daily = { day: string; mentions: number };
 type Primary = {
   id: number; source: string; external_id: string; added_at: string; geo_name: string | null; country: string;
-  lat: number; lon: number; url: string | null; props: { kind?: string; title?: string; alert?: string | null; mag?: number; population?: string | null; event?: string; severity?: string; expires?: string; category?: string; centre?: string; magnitude?: number; color?: string; color_prev?: string; synopsis?: string; detections?: number; area_km2?: number; frp_sum?: number; last_seen?: string };
+  lat: number; lon: number; url: string | null; props: { kind?: string; title?: string; alert?: string | null; mag?: number; population?: string | null; event?: string; severity?: string; expires?: string; category?: string; centre?: string; magnitude?: number; color?: string; color_prev?: string; synopsis?: string; detections?: number; area_km2?: number; frp_sum?: number; last_seen?: string; entity_type?: string; datasource?: string; duration_s?: number; region_name?: string };
 };
 
 declare global { interface Window { __newsradar?: { ready: boolean; layers: string[]; regions: number; events: number; primary: number } } }
@@ -80,7 +80,7 @@ export default function Globe() {
         id: "primary", type: "circle", source: "primary",
         paint: {
           "circle-radius": ["case", ["==", ["get", "source"], "usgs"], ["interpolate", ["linear"], ["coalesce", ["get", "mag"], 4.5], 4.5, 4, 7.5, 16], 7],
-          "circle-color": ["match", ["get", "source"], "usgs", "#b45309", "nws", "#0e7490", "tsunami", "#be123c", "volcano", "#c2410c", "firms", "#ea580c", "#7c3aed"],
+          "circle-color": ["match", ["get", "source"], "usgs", "#b45309", "nws", "#0e7490", "tsunami", "#be123c", "volcano", "#c2410c", "firms", "#ea580c", "ioda", "#475569", "#7c3aed"],
           "circle-opacity": 0.75, "circle-stroke-color": "#fff", "circle-stroke-width": 1,
         },
       });
@@ -164,7 +164,7 @@ export default function Globe() {
       <div className="panel">
         <h1>news-radar</h1>
         <div className="muted">Last {HOURS} h. Tint: share of world mentions vs the region&apos;s usual share over 30 days, as a z-score, regions with {MIN_MENTIONS}+ mentions. Dots: top {events.length} stories by distinct outlets covering them in that window, reprints of one headline counted as one story.</div>
-        <div className="legend"><i /> z 1 → 5+ <b /> story <b style={{ background: "#b45309" }} /> quake M4.5+ <b style={{ background: "#7c3aed" }} /> GDACS alert <b style={{ background: "#0e7490" }} /> NWS severe <b style={{ background: "#be123c" }} /> tsunami <b style={{ background: "#c2410c" }} /> volcano <b style={{ background: "#ea580c" }} /> fire 50+ detections</div>
+        <div className="legend"><i /> z 1 → 5+ <b /> story <b style={{ background: "#b45309" }} /> quake M4.5+ <b style={{ background: "#7c3aed" }} /> GDACS alert <b style={{ background: "#0e7490" }} /> NWS severe <b style={{ background: "#be123c" }} /> tsunami <b style={{ background: "#c2410c" }} /> volcano <b style={{ background: "#ea580c" }} /> fire 50+ detections <b style={{ background: "#475569" }} /> internet outage</div>
         <div className="muted">{primary.length} primary events, last {PRIMARY_HOURS} h.</div>
         <div className="muted" data-testid="as-of">{asOf ? `Coverage as of ${new Date(asOf).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : "Loading…"} · refreshes every 5 min</div>
         {hover ? (
@@ -209,6 +209,7 @@ function primaryHtml(p: Primary): string {
   const esc = (s: string | null | undefined) => (s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
   const when = new Date(p.added_at).toUTCString().slice(5, 22) + " UTC";
   const line2 = p.source === "usgs" ? `M${p.props.mag} earthquake`
+    : p.source === "ioda" ? `Internet outage (${esc(p.props.entity_type)}) · ${esc(p.props.datasource)} · ${Math.round((p.props.duration_s ?? 0) / 360) / 10} h so far`
     : p.source === "firms" ? `Fire · ${p.props.detections} detections · ${p.props.area_km2} km² · last seen ${p.props.last_seen ? new Date(p.props.last_seen).toUTCString().slice(5, 22) + " UTC" : "?"}`
     : p.source === "volcano" ? `Volcano ${esc(p.props.color)} (was ${esc(p.props.color_prev)})${p.props.synopsis ? `<br>${esc(p.props.synopsis)}` : ""}`
     : p.source === "tsunami" ? `Tsunami ${esc(p.props.category)} · ${esc(p.props.centre)}${p.props.magnitude ? ` · M${p.props.magnitude}` : ""}`

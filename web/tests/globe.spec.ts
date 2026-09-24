@@ -20,7 +20,7 @@ test("primary events carry props and no Green alerts", async ({ request }) => {
   const p = await (await request.get("/api/events/primary?hours=168")).json();
   expect(p.events.length).toBeGreaterThan(0);
   for (const e of p.events) {
-    expect(["usgs", "gdacs", "nws", "tsunami", "volcano", "firms"]).toContain(e.source);
+    expect(["usgs", "gdacs", "nws", "tsunami", "volcano", "firms", "ioda"]).toContain(e.source);
     expect(e.props.alert ?? "").not.toBe("Green");
   }
 });

@@ -24,7 +24,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python rollup.py --full
 ```
 
-Then `scripts/load_countries.py` once, and on a schedule: `ingest.py
+Then `scripts/load_countries.py` and `scripts/load_country_codes.py` once, and on a schedule: `ingest.py
 catchup`, `headlines.py` and `ingest.py primary` every 15 minutes, and
 `rollup.py` hourly. `systemd/` has user units; symlink them into
 `~/.config/systemd/user/` and `systemctl --user enable --now` the three
@@ -89,3 +89,11 @@ have it reverse geocoded.
 ## License
 
 Apache-2.0.
+
+## Data licences
+
+The code is Apache-2.0; the data each adapter pulls keeps its source's
+terms. GDELT, USGS, NWS, NOAA tsunami centres and NASA FIRMS are open or
+public domain (FIRMS asks for citation). GeoNames (country codes) is
+CC BY 4.0. **IODA is "Copyright Georgia Tech Research Corporation. All
+Rights Reserved"**: fine to read for your own instance, not to republish.
