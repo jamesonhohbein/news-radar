@@ -201,3 +201,54 @@ CREATE TABLE IF NOT EXISTS country_shape (
     geom geometry(MultiPolygon, 4326) NOT NULL
 );
 CREATE INDEX IF NOT EXISTS country_shape_gist ON country_shape USING gist (geom);
+
+-- GDELT Mentions (R18). Its own source row so source_health sees it; it
+-- produces no event rows, only mentions of gdelt-events rows.
+INSERT INTO source (kind, name, attention) VALUES ('gdelt', 'gdelt-mentions', true)
+ON CONFLICT (name) DO NOTHING;
+
+-- Raw mentions, a 72 h buffer. Distinct outlets per hour, per region and per
+-- growth window cannot be summed across 15-minute files, so they are counted
+-- from here and everything long-lived is rolled up (rollup.py).
+CREATE TABLE IF NOT EXISTS mention (
+    event_id     BIGINT      NOT NULL,
+    mentioned_at TIMESTAMPTZ NOT NULL,
+    source_name  TEXT        NOT NULL
+);
+CREATE INDEX IF NOT EXISTS mention_at_brin ON mention USING brin (mentioned_at);
+CREATE INDEX IF NOT EXISTS mention_event ON mention (event_id, mentioned_at);
+
+-- Coverage per event per hour, kept 90 days like event.
+CREATE TABLE IF NOT EXISTS mention_hourly (
+    event_id BIGINT      NOT NULL,
+    hour     TIMESTAMPTZ NOT NULL,
+    mentions INT         NOT NULL,
+    sources  INT         NOT NULL,
+    PRIMARY KEY (event_id, hour)
+);
+CREATE INDEX IF NOT EXISTS mention_hourly_hour ON mention_hourly (hour);
+
+-- Headline normalization for syndication collapse (R21): lowercase, drop a
+-- trailing " - Site" or " | Site", strip punctuation, collapse whitespace.
+-- Reprints of one wire story then share a key across sites.
+CREATE OR REPLACE FUNCTION norm_title(t TEXT) RETURNS TEXT
+LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+    SELECT nullif(btrim(regexp_replace(regexp_replace(
+               regexp_replace(lower(t), '\s+[-|\u2013\u2014:]\s+[^-|\u2013\u2014:]{2,40}$', ''),
+               '[^[:alnum:][:space:]]', '', 'g'),
+           '\s+', ' ', 'g')), '')
+$$;
+
+-- Growth per event (R20): outlets and mentions in the last 1 h and 6 h,
+-- against the first-window counts on the event row. Reads the raw buffer, so
+-- sources are exact distinct counts.
+CREATE OR REPLACE VIEW event_growth AS
+SELECT e.id AS event_id, e.url, e.added_at,
+       e.num_sources AS first_sources, e.num_mentions AS first_mentions,
+       count(*) FILTER (WHERE m.mentioned_at > now() - interval '1 hour')                       AS mentions_1h,
+       count(DISTINCT m.source_name) FILTER (WHERE m.mentioned_at > now() - interval '1 hour')  AS sources_1h,
+       count(*)                                                                                  AS mentions_6h,
+       count(DISTINCT m.source_name)                                                             AS sources_6h
+FROM mention m JOIN event e ON e.id = m.event_id
+WHERE m.mentioned_at > now() - interval '6 hours'
+GROUP BY e.id;

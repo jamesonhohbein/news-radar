@@ -41,9 +41,11 @@ spec, not this one.
 
 - **R18 GDELT Mentions every 15 min.** Same `lastupdate.txt` cycle as R2,
   https only. Measured 2026-09-24 at a quiet slot: 2,409 rows, 0.5 MB per
-  file, so roughly 250k to 400k rows/day. Raw rows are not kept. Each file
-  rolls into `mention_hourly(event_id, hour, mentions, sources)`, where
-  sources counts distinct `MentionSourceName`. Mentions of events not in
+  file, so roughly 250k to 400k rows/day. Raw rows (event, time, outlet)
+  are kept only as a 72 h buffer, because distinct outlets per hour cannot
+  be summed across 15-minute files (changed at build, 2026-09-24). The
+  buffer rolls into `mention_hourly(event_id, hour, mentions, sources)`,
+  where sources counts distinct `MentionSourceName`. Mentions of events not in
   `event` (older than 90 days, or no geo) are counted in `fetch_log` and
   dropped.
 - **R19 Attention counts coverage over time, not first sight.**

@@ -84,3 +84,24 @@ def log_fetch(conn: psycopg.Connection, sid: int, file: str, seen: int, kept: in
                     ON CONFLICT (source_id, file) DO UPDATE
                     SET fetched_at = now(), rows_seen = EXCLUDED.rows_seen, rows_kept = EXCLUDED.rows_kept""",
                  (sid, file, seen, kept))
+
+
+def insert_mentions(conn: psycopg.Connection, events_sid: int, rows: Iterable[tuple[str, object, str]]) -> tuple[int, int]:
+    """Mentions of events we hold go into the raw buffer; the rest (events
+    with no geo, or pruned) are counted and dropped. Returns (seen, kept).
+    Idempotency is fetch_log's job: a file is loaded once."""
+    with conn.cursor() as cur:
+        cur.execute("CREATE TEMP TABLE mstaging (gid text, mentioned_at timestamptz, source_name text) ON COMMIT DROP")
+        n = 0
+        with cur.copy("COPY mstaging FROM STDIN") as copy:
+            for r in rows:
+                copy.write_row(r)
+                n += 1
+        if n == 0:
+            return 0, 0
+        cur.execute("""
+            INSERT INTO mention (event_id, mentioned_at, source_name)
+            SELECT e.id, m.mentioned_at, m.source_name
+            FROM mstaging m JOIN event e ON e.source_id = %s AND e.external_id = m.gid
+        """, (events_sid,))
+        return n, cur.rowcount

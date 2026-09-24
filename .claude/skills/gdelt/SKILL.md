@@ -53,8 +53,11 @@ The web app and agent use the read-only `reader` role (10 s timeout).
 | Table | Holds | Kept |
 |---|---|---|
 | `event` (source `gdelt-events`) | one row per geolocated event | 90 d |
+| `mention` (source `gdelt-mentions`) | raw (event, time, outlet), mentions of events we hold | 72 h |
+| `mention_hourly` | mentions and distinct outlets per event per hour | 90 d |
+| `event_growth` | view: mentions and outlets in the last 1 h and 6 h per event | |
 | `story` | headline and site per URL with 2+ first-window sources | |
-| `attention_hourly` / `attention_daily` | events, mentions, sources per country or ADM1 | 90 d / forever |
+| `attention_hourly` / `attention_daily` | events (first sightings), mentions and outlets (coverage that hour) per country or ADM1 | 90 d / forever |
 | `attention_anomaly` | hourly z-score vs same hour over 30 d, last 48 h | |
 | `fetch_log` | one row per loaded file | |
 
@@ -67,6 +70,12 @@ JOIN source s ON s.id = fl.source_id AND s.name = 'gdelt-events';
 SELECT region, sum(mentions) AS m FROM attention_hourly
 WHERE region_kind = 'country' AND hour > now() - interval '24 hours'
 GROUP BY region ORDER BY m DESC LIMIT 10;
+
+-- What is still building: most outlets in the last hour.
+SELECT g.sources_1h, g.sources_6h, e.country, s.title
+FROM event_growth g JOIN event e ON e.id = g.event_id
+LEFT JOIN story s ON s.url = g.url AND s.status = 'ok'
+ORDER BY g.sources_1h DESC LIMIT 10;
 
 -- Top stories with headlines, one per URL.
 SELECT DISTINCT ON (e.url) e.num_sources, e.country, s.title, s.site

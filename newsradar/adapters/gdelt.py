@@ -1,9 +1,13 @@
-"""GDELT 2.0 Events adapter.
+"""GDELT 2.0 adapter: Events, and Mentions (R18).
 
 Every 15 minutes GDELT publishes export.CSV.zip: tab-separated, no header,
 61 columns in the order of the v2 codebook, pinned below as COLUMNS. Only
 events with a resolvable ActionGeo point are kept; the rest are counted and
 dropped, because a map cannot show them and the attention series is spatial.
+
+Mentions (`mentions.CSV.zip`, 16 columns) has one row per article that
+mentions an event, including events first seen days earlier. It is the only
+place later coverage appears; Events counts stop after the first window.
 
 Use https. The http host answers 301 and curl-style clients that do not
 follow redirects see an empty body, which looks like GDELT being down.
@@ -48,12 +52,16 @@ def _get(url: str, timeout: int = 60) -> bytes:
         return r.read()
 
 
-def _export_files(listing: bytes) -> list[str]:
-    """`size md5 url` per line; keep the export files, as bare file names."""
+EXPORT = ".export.CSV.zip"
+MENTIONS = ".mentions.CSV.zip"
+
+
+def _files(listing: bytes, suffix: str = EXPORT) -> list[str]:
+    """`size md5 url` per line; keep one file type, as bare file names."""
     out = []
     for line in listing.decode("utf-8", "replace").splitlines():
         parts = line.split()
-        if len(parts) == 3 and parts[2].endswith(".export.CSV.zip"):
+        if len(parts) == 3 and parts[2].endswith(suffix):
             out.append(parts[2].rsplit("/", 1)[1])
     return out
 
@@ -62,12 +70,12 @@ def file_stamp(file: str) -> datetime:
     return datetime.strptime(file[:14], "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
 
 
-def latest() -> str:
-    return _export_files(_get(BASE + "lastupdate.txt"))[0]
+def latest(suffix: str = EXPORT) -> str:
+    return _files(_get(BASE + "lastupdate.txt"), suffix)[0]
 
 
-def list_files(since: datetime) -> list[str]:
-    files = _export_files(_get(BASE + "masterfilelist.txt", timeout=180))
+def list_files(since: datetime, suffix: str = EXPORT) -> list[str]:
+    files = _files(_get(BASE + "masterfilelist.txt", timeout=180), suffix)
     return [f for f in files if file_stamp(f) >= since]
 
 
@@ -132,3 +140,27 @@ def parse_rows(rows: Iterable[list[str]]) -> Iterator[tuple[Event | None, bool]]
             num_articles=int(g("NumArticles") or 0),
             url=_opt(g("SOURCEURL")),
         ), True
+
+
+MENTION_COLUMNS = 16
+
+
+def parse_mentions(blob: bytes) -> Iterator[tuple[str, datetime, str] | None]:
+    """Yield (GlobalEventID, MentionTimeDate, MentionSourceName), or None for a
+    malformed row so the caller can count it."""
+    with zipfile.ZipFile(io.BytesIO(blob)) as z:
+        text = z.read(z.namelist()[0]).decode("utf-8", "replace")
+    yield from parse_mention_rows(csv.reader(io.StringIO(text), delimiter="\t", quoting=csv.QUOTE_NONE))
+
+
+def parse_mention_rows(rows: Iterable[list[str]]) -> Iterator[tuple[str, datetime, str] | None]:
+    for row in rows:
+        if len(row) < MENTION_COLUMNS - 2 or not row[0] or not row[4]:
+            yield None
+            continue
+        try:
+            t = datetime.strptime(row[2], "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+        except ValueError:
+            yield None
+            continue
+        yield row[0], t, row[4]
