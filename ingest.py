@@ -24,13 +24,13 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 from newsradar import store
-from newsradar.adapters import gdacs, gdelt, nws, tsunami, usgs, volcano
+from newsradar.adapters import firms, gdacs, gdelt, nws, tsunami, usgs, volcano
 from newsradar.db import connect
 
 SOURCE = "gdelt-events"
 MENTIONS_SOURCE = "gdelt-mentions"
 GKG_SOURCE = "gdelt-gkg"
-FEEDS = (usgs, gdacs, nws, tsunami, volcano)
+FEEDS = (usgs, gdacs, nws, tsunami, volcano, firms)
 
 
 def load_files(conn, sid: int, files: list[str], workers: int = 4) -> tuple[int, int]:
@@ -150,6 +150,19 @@ def load_feeds(conn, only: set[str] | None = None) -> list[str]:
             sid = store.source_id(conn, mod.SOURCE)
         except SystemExit:
             out.append(f"{mod.KIND}: disabled")
+            continue
+        if hasattr(mod, "load"):
+            # Loaders own their whole fetch (FIRMS: conditional downloads,
+            # raw detections, clustering).
+            try:
+                line = mod.load(conn, sid, store.log_fetch)
+                geocoded = store.reverse_geocode(conn, sid)
+                conn.commit()
+            except Exception as exc:  # noqa: BLE001
+                conn.rollback()
+                out.append(f"{mod.KIND}: failed: {exc}")
+                continue
+            out.append(f"{mod.KIND}: {line}, {geocoded} geocoded")
             continue
         try:
             blob = mod.fetch()

@@ -116,7 +116,9 @@ drawn as their own layer. Revisions update `props` in place unless noted.
   48 h into `fire` events. A cluster that touches an existing fire extends
   it; one that does not is a new fire. `props` carry detection count and
   summed FRP (fire radiative power, the satellite's measure of how
-  intensely it burns). MODIS is skipped as redundant with VIIRS.
+  intensely it burns). MODIS is skipped as redundant with VIIRS. Measured on first load: 178,992
+  detections formed 47,394 fires, 260 of them with 50+ detections; the map
+  draws those (50+, burning in the last 24 h).
 - **R28 IODA outages.** `api.ioda.inetintel.cc.gatech.edu/v2/outages/events`,
   no auth. Only `country` and `region` entities are stored; ASN-level rows
   are most of the volume and dropped. No ids: key

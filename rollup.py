@@ -143,6 +143,8 @@ def prune(conn) -> dict[str, int]:
                                   (now - timedelta(days=RETAIN_EVENT_DAYS),)).rowcount,
             "mention": conn.execute("DELETE FROM mention WHERE mentioned_at < %s",
                                     (now - timedelta(hours=RETAIN_MENTION_HOURS),)).rowcount,
+            "firms_detection": conn.execute("DELETE FROM firms_detection WHERE acq_at < %s",
+                                            (now - timedelta(days=RETAIN_GKG_DAYS),)).rowcount,
             "gkg_article": conn.execute("DELETE FROM gkg_article WHERE added_at < %s",   # cascades to gkg_location
                                         (now - timedelta(days=RETAIN_GKG_DAYS),)).rowcount,
             "theme_hourly": conn.execute("DELETE FROM theme_hourly WHERE hour < %s",

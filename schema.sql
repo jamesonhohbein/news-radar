@@ -370,6 +370,10 @@ WHERE NOT s.attention AND CASE s.kind
                       AND e.added_at > now() - interval '24 hours'
     -- Only elevated volcanoes are listed; one not seen lately has gone back to Green.
     WHEN 'volcano' THEN (e.props->>'seen')::timestamptz > now() - interval '3 hours'
+    -- 50+ detections and burning in the last day: ~260 large fires on
+    -- 2026-09-24, not the ~47k small burns a day produces (20+ gave 1,071).
+    WHEN 'firms' THEN (e.props->>'detections')::int >= 50
+                      AND (e.props->>'last_seen')::timestamptz > now() - interval '24 hours'
     ELSE false END;
 
 -- Tsunami bulletins (R25). Polled every 5 min by news-radar-fast.timer.
@@ -379,3 +383,39 @@ ON CONFLICT (name) DO NOTHING;
 -- USGS elevated volcanoes (R26).
 INSERT INTO source (kind, name, attention) VALUES ('volcano', 'usgs-volcanoes', false)
 ON CONFLICT (name) DO NOTHING;
+
+-- NASA FIRMS (R27): raw VIIRS detections, 30 days, and the fires they form.
+INSERT INTO source (kind, name, attention, expect_every) VALUES ('firms', 'firms-fires', false, '3 hours')
+ON CONFLICT (name) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS firms_detection (
+    id         BIGSERIAL   PRIMARY KEY,
+    satellite  TEXT        NOT NULL,     -- N (Suomi NPP), N20, N21
+    lat        DOUBLE PRECISION NOT NULL,
+    lon        DOUBLE PRECISION NOT NULL,
+    acq_at     TIMESTAMPTZ NOT NULL,
+    frp        REAL,                     -- fire radiative power, MW
+    confidence TEXT,                     -- low | nominal | high
+    daynight   TEXT,
+    bright_ti4 REAL,
+    geom       geometry(Point, 4326) NOT NULL,
+    fire_id    BIGINT,                   -- event.id of the fire it belongs to
+    UNIQUE (satellite, lat, lon, acq_at)
+);
+CREATE INDEX IF NOT EXISTS firms_detection_geom ON firms_detection USING gist (geom);
+CREATE INDEX IF NOT EXISTS firms_detection_unassigned ON firms_detection (id) WHERE fire_id IS NULL;
+CREATE INDEX IF NOT EXISTS firms_detection_fire ON firms_detection (fire_id);
+CREATE INDEX IF NOT EXISTS firms_detection_acq_brin ON firms_detection USING brin (acq_at);
+
+CREATE TABLE IF NOT EXISTS fire (
+    event_id   BIGINT PRIMARY KEY,
+    hull       geometry(Geometry, 4326) NOT NULL,
+    detections INT  NOT NULL,
+    high_conf  INT  NOT NULL,
+    frp_sum    REAL NOT NULL,
+    frp_max    REAL NOT NULL,
+    first_seen TIMESTAMPTZ NOT NULL,
+    last_seen  TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS fire_hull ON fire USING gist (hull);
+CREATE INDEX IF NOT EXISTS fire_last_seen ON fire (last_seen);

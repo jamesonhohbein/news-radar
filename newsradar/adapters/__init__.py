@@ -17,6 +17,9 @@ Feed adapters (usgs, gdacs) publish one endpoint that is the current state:
     resolve(conn, events) -> list[Event]   -- optional: place events parse left without a point
     after_insert(conn, sid)               -- optional: link rows to each other after upsert
 
+A feed adapter may instead define load(conn, sid, log_fetch) -> str and own
+its whole fetch (FIRMS: conditional downloads, raw rows, clustering).
+
 ingest.py does the rest: skipping files already in fetch_log, inserting
 events idempotently (feed adapters upsert, because a quake's magnitude and an
 alert's level get revised), recording the fetch."""
