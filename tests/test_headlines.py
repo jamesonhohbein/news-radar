@@ -48,5 +48,13 @@ class T12Select(DBCase):
         self._ev("https://a/6", 5); self._story("https://a/6", "fail", 1, 7)      # failed 7 h ago: retry
         self._ev("https://a/7", 5); self._story("https://a/7", "fail", 3, 48)     # attempts exhausted
         self._ev("https://a/8", 1); self._ev("https://a/8", 3)                    # max over events counts
+        # Grew after its first window: an old event, 1 first-window source,
+        # 3 outlets mentioning it in the last hour. Picked. One outlet: not.
+        for url, outlets in (("https://a/9", 3), ("https://a/10", 1)):
+            eid = self.conn.execute("""INSERT INTO event (source_id, external_id, added_at, country, geom, num_mentions, num_sources, num_articles, url)
+                                       VALUES (1, %s, now() - interval '30 hours', 'US', ST_SetSRID(ST_MakePoint(0,0),4326), 1, 1, 1, %s)
+                                       RETURNING id""", (url, url)).fetchone()[0]
+            for i in range(outlets):
+                self.conn.execute("INSERT INTO mention VALUES (%s, now() - interval '20 minutes', %s)", (eid, f"o{i}.com"))
         self.conn.commit()
-        self.assertEqual(set(self._selected()), {"https://a/1", "https://a/6", "https://a/8"})
+        self.assertEqual(set(self._selected()), {"https://a/1", "https://a/6", "https://a/8", "https://a/9"})

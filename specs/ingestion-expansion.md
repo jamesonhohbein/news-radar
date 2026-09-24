@@ -62,7 +62,11 @@ spec, not this one.
   normalized headline (lowercased, punctuation and site suffix stripped)
   within 48 h. Story-level counts use distinct sites, so 21 reprints of one
   PA story count as one story with 21 sites, not 21 stories. Computed at
-  read time from `story`. No publisher-network table in this spec.
+  read time from `story` by `top_stories(hours, limit)`. No
+  publisher-network table in this spec, so a syndicated story still counts
+  each network paper as its own outlet; collapse only stops it appearing as
+  many stories. R16's headline fetch also picks URLs whose event reached 2+
+  distinct outlets in the buffer, so a story that grows late gets a title.
 - **R22 GKG, slim.** GKG 2.1 every 15 min. Measured: 875 articles, 11.5 MB
   raw per quiet file, about 1 GB/day raw, so raw is never stored. Kept per
   article: `gkg_article(id, added_at, url, site, tone, themes text[])` and

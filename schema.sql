@@ -252,3 +252,34 @@ SELECT e.id AS event_id, e.url, e.added_at,
 FROM mention m JOIN event e ON e.id = m.event_id
 WHERE m.mentioned_at > now() - interval '6 hours'
 GROUP BY e.id;
+
+-- Stories ranked by coverage (R20, R21). A story is the event URLs sharing a
+-- normalized headline (URL alone when there is no headline yet); its rank is
+-- distinct outlets mentioning any of its events within the window, from the
+-- mention buffer, so the window caps at 72 h. rep is the story's most
+-- mentioned event, whose place and URL stand for it on the map.
+CREATE OR REPLACE FUNCTION top_stories(p_hours INT, p_limit INT)
+RETURNS TABLE (skey TEXT, rep BIGINT, outlets INT, outlets_1h INT, mentions INT, sites INT)
+LANGUAGE sql STABLE AS $$
+    WITH per_event AS (
+        SELECT event_id, count(*) AS mentions
+        FROM mention
+        WHERE mentioned_at > now() - make_interval(hours => p_hours)
+        GROUP BY event_id
+    ), keyed AS (
+        SELECT p.event_id, p.mentions, s.site, coalesce(norm_title(s.title), e.url, e.id::text) AS skey
+        FROM per_event p JOIN event e ON e.id = p.event_id
+        LEFT JOIN story s ON s.url = e.url AND s.status = 'ok'
+    )
+    SELECT k.skey,
+           (array_agg(k.event_id ORDER BY k.mentions DESC, k.event_id))[1],
+           count(DISTINCT m.source_name)::int,
+           (count(DISTINCT m.source_name) FILTER (WHERE m.mentioned_at > now() - interval '1 hour'))::int,
+           count(*)::int,
+           count(DISTINCT k.site)::int
+    FROM keyed k
+    JOIN mention m ON m.event_id = k.event_id AND m.mentioned_at > now() - make_interval(hours => p_hours)
+    GROUP BY k.skey
+    ORDER BY 3 DESC, 4 DESC, 1
+    LIMIT p_limit
+$$;

@@ -10,6 +10,8 @@ test("APIs return rows", async ({ request }) => {
   const e = await (await request.get("/api/events/top?hours=24&limit=10")).json();
   expect(e.events.length).toBe(10);
   expect(new Set(e.events.map((x: { url: string }) => x.url)).size).toBe(10);
+  const outlets = e.events.map((x: { outlets: number }) => x.outlets);
+  expect(outlets).toEqual([...outlets].sort((a: number, b: number) => b - a));
   const d = await (await request.get(`/api/attention/daily?region=${e.events[0].country}&days=30`)).json();
   expect(d.series.length).toBeGreaterThan(0);
 });

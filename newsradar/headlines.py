@@ -13,13 +13,23 @@ RETRY_AFTER_HOURS = 6
 WINDOW_HOURS = 24
 
 # URLs at the threshold in the window that have no story row, or a failed
-# one that is old enough and under the attempt cap.
+# one that is old enough and under the attempt cap. A URL qualifies on its
+# first-window sources, or on distinct outlets mentioning its event within
+# the window (R20), so a story that grows after its first 15 minutes gets a
+# headline too.
 SELECT_SQL = """
 SELECT e.url
 FROM (
-    SELECT url, max(num_sources) AS ns
-    FROM event
-    WHERE added_at > now() - make_interval(hours => %(window)s) AND url IS NOT NULL
+    SELECT url, max(ns) AS ns FROM (
+        SELECT url, num_sources AS ns
+        FROM event
+        WHERE added_at > now() - make_interval(hours => %(window)s) AND url IS NOT NULL
+        UNION ALL
+        SELECT e.url, count(DISTINCT m.source_name)
+        FROM mention m JOIN event e ON e.id = m.event_id
+        WHERE m.mentioned_at > now() - make_interval(hours => %(window)s) AND e.url IS NOT NULL
+        GROUP BY e.url
+    ) u
     GROUP BY url
 ) e
 LEFT JOIN story s ON s.url = e.url
