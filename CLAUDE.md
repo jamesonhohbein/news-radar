@@ -43,6 +43,12 @@ prune would eat the buffer mid-load), then `rollup.py --full --no-prune`.
 Attention rows older than the Mentions backfill still carry the old
 first-window sums.
 
+**Theme counts are additive; never reload a GKG file.** `theme_daily` and
+`theme_hourly` are `+=` at ingest, exact only because `fetch_log` loads each
+GKG file once. Deleting a `gdelt-gkg` fetch_log row to "re-run" a file
+double-counts its themes. `gkg_article` would skip the duplicates; the theme
+tables would not.
+
 **`norm_title()` holds dash escapes, not literal dashes.** Headlines use en
 and em dashes as site separators; the regex spells them `\u2013\u2014`.
 

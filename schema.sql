@@ -283,3 +283,50 @@ LANGUAGE sql STABLE AS $$
     ORDER BY 3 DESC, 4 DESC, 1
     LIMIT p_limit
 $$;
+
+-- GKG, slim (R22). Raw GKG is ~1 GB/day, so only these columns are kept, 30
+-- days. Every place an article names, not one action geo per coded event.
+INSERT INTO source (kind, name, attention) VALUES ('gdelt', 'gdelt-gkg', true)
+ON CONFLICT (name) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS gkg_article (
+    id       BIGSERIAL   PRIMARY KEY,
+    gkg_id   TEXT        NOT NULL UNIQUE,
+    added_at TIMESTAMPTZ NOT NULL,
+    url      TEXT,
+    site     TEXT,
+    tone     REAL,
+    themes   TEXT[]      NOT NULL
+);
+CREATE INDEX IF NOT EXISTS gkg_article_added_brin ON gkg_article USING brin (added_at);
+
+CREATE TABLE IF NOT EXISTS gkg_location (
+    article_id BIGINT   NOT NULL REFERENCES gkg_article(id) ON DELETE CASCADE,
+    loc_type   SMALLINT NOT NULL,
+    country    TEXT     NOT NULL,
+    adm1       TEXT,                 -- never set for type 1 (country centroid)
+    geom       geometry(Point, 4326) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS gkg_location_article ON gkg_location (article_id);
+CREATE INDEX IF NOT EXISTS gkg_location_country ON gkg_location (country);
+
+-- Articles per theme per region. Written additively at ingest, one file at a
+-- time inside that file's transaction: each article is in exactly one file and
+-- fetch_log loads a file once, so += is exact and nothing is re-expanded.
+CREATE TABLE IF NOT EXISTS theme_daily (
+    region_kind TEXT NOT NULL,   -- 'country' | 'adm1'
+    region      TEXT NOT NULL,
+    theme       TEXT NOT NULL,
+    day         DATE NOT NULL,
+    articles    INT  NOT NULL,
+    PRIMARY KEY (region_kind, region, theme, day)
+);
+
+CREATE TABLE IF NOT EXISTS theme_hourly (
+    region   TEXT        NOT NULL,   -- country only
+    theme    TEXT        NOT NULL,
+    hour     TIMESTAMPTZ NOT NULL,
+    articles INT         NOT NULL,
+    PRIMARY KEY (region, theme, hour)
+);
+CREATE INDEX IF NOT EXISTS theme_hourly_hour ON theme_hourly (hour);

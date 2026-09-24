@@ -105,3 +105,57 @@ def insert_mentions(conn: psycopg.Connection, events_sid: int, rows: Iterable[tu
             FROM mstaging m JOIN event e ON e.source_id = %s AND e.external_id = m.gid
         """, (events_sid,))
         return n, cur.rowcount
+
+
+def insert_gkg(conn: psycopg.Connection, articles: Iterable) -> int:
+    """GKG articles and their places, then their theme counts, in the caller's
+    transaction. Returns articles inserted. A re-sent article (same gkg_id)
+    inserts nothing and so adds nothing to the theme tables."""
+    with conn.cursor() as cur:
+        cur.execute("CREATE TEMP TABLE gstaging (gkg_id text, added_at timestamptz, url text, site text, tone real, themes text[]) ON COMMIT DROP")
+        cur.execute("CREATE TEMP TABLE lstaging (gkg_id text, loc_type smallint, country text, adm1 text, lat float8, lon float8) ON COMMIT DROP")
+        # One COPY per connection at a time, so the file is held in memory
+        # (under 1k articles per 15-minute file).
+        articles = list(articles)
+        n = len(articles)
+        with cur.copy("COPY gstaging FROM STDIN") as copy:
+            for a in articles:
+                copy.write_row((a.gkg_id, a.added_at, a.url, a.site, a.tone, list(a.themes)))
+        with cur.copy("COPY lstaging FROM STDIN") as copy:
+            for a in articles:
+                for l in a.locations:
+                    copy.write_row((a.gkg_id, l.loc_type, l.country, l.adm1, l.lat, l.lon))
+        if n == 0:
+            return 0
+        cur.execute("""
+            CREATE TEMP TABLE gnew ON COMMIT DROP AS
+            WITH ins AS (
+                INSERT INTO gkg_article (gkg_id, added_at, url, site, tone, themes)
+                SELECT gkg_id, added_at, url, site, tone, themes FROM gstaging
+                ON CONFLICT (gkg_id) DO NOTHING
+                RETURNING id, gkg_id, added_at, themes
+            ) SELECT * FROM ins""")
+        inserted = cur.rowcount
+        cur.execute("""
+            INSERT INTO gkg_location (article_id, loc_type, country, adm1, geom)
+            SELECT g.id, l.loc_type, l.country, l.adm1, ST_SetSRID(ST_MakePoint(l.lon, l.lat), 4326)
+            FROM lstaging l JOIN gnew g USING (gkg_id)""")
+        # One count per article per (region, theme), however often it names the place.
+        cur.execute("""
+            WITH places AS (
+                SELECT DISTINCT g.id, g.added_at, g.themes, 'country' AS kind, l.country AS region
+                FROM gnew g JOIN lstaging l USING (gkg_id)
+                UNION
+                SELECT DISTINCT g.id, g.added_at, g.themes, 'adm1', l.adm1
+                FROM gnew g JOIN lstaging l USING (gkg_id) WHERE l.adm1 IS NOT NULL
+            ), x AS (
+                SELECT kind, region, t AS theme, added_at FROM places, unnest(themes) AS t
+            ), d AS (
+                INSERT INTO theme_daily (region_kind, region, theme, day, articles)
+                SELECT kind, region, theme, (added_at AT TIME ZONE 'UTC')::date, count(*) FROM x GROUP BY 1, 2, 3, 4
+                ON CONFLICT (region_kind, region, theme, day) DO UPDATE SET articles = theme_daily.articles + EXCLUDED.articles
+            )
+            INSERT INTO theme_hourly (region, theme, hour, articles)
+            SELECT region, theme, date_trunc('hour', added_at), count(*) FROM x WHERE kind = 'country' GROUP BY 1, 2, 3
+            ON CONFLICT (region, theme, hour) DO UPDATE SET articles = theme_hourly.articles + EXCLUDED.articles""")
+        return inserted
