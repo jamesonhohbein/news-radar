@@ -9,6 +9,9 @@ const STYLE = process.env.NEXT_PUBLIC_MAP_STYLE ?? "https://tiles.openfreemap.or
 const HOURS = 24;
 const MIN_MENTIONS = 50;
 const PRIMARY_HOURS = 72;
+// Ingest lands every 15 min and rollups hourly; 5 min keeps an open tab
+// within one ingest of the database without hammering it.
+const REFRESH_MS = 5 * 60 * 1000;
 
 type Region = { region: string; name: string | null; z: number; mentions: number; expected: number; peak_z: number | null };
 type Ev = {
@@ -34,6 +37,7 @@ export default function Globe() {
   const [primary, setPrimary] = useState<Primary[]>([]);
   const [hover, setHover] = useState<{ fips: string; name: string } | null>(null);
   const [series, setSeries] = useState<Daily[]>([]);
+  const [asOf, setAsOf] = useState<string | null>(null);
 
   useEffect(() => {
     if (!el.current || mapRef.current) return;
@@ -46,19 +50,7 @@ export default function Globe() {
 
     map.on("style.load", async () => {
       map.fitBounds([[-170, -58], [180, 78]], { padding: 8, duration: 0 });
-      const [countries, anomaly, top, prim] = await Promise.all([
-        fetch("/countries.geojson").then((r) => r.json()),
-        fetch("/api/anomaly?kind=country").then((r) => r.json()),
-        fetch(`/api/events/top?hours=${HOURS}&limit=300`).then((r) => r.json()),
-        fetch(`/api/events/primary?hours=${PRIMARY_HOURS}`).then((r) => r.json()),
-      ]);
-      const regs: Region[] = anomaly.regions;
-      const evs: Ev[] = top.events;
-      const prims: Primary[] = prim.events;
-      setRegions(regs);
-      setEvents(evs);
-      setPrimary(prims);
-      for (const r of regs) if (r.name) namesRef.current[r.region] = r.name;
+      const countries = await fetch("/countries.geojson").then((r) => r.json());
       for (const f of countries.features) namesRef.current[f.properties.fips] = f.properties.name;
 
       map.addSource("countries", { type: "geojson", data: countries, promoteId: "fips" });
@@ -71,14 +63,7 @@ export default function Globe() {
         },
       }, firstSymbolLayer(map));
       map.addLayer({ id: "countries-line", type: "line", source: "countries", paint: { "line-color": "rgba(128,128,128,0.35)", "line-width": 0.5 } }, firstSymbolLayer(map));
-      // Tint only regions with enough volume for z to mean something: a
-      // microstate going from 1 mention to 25 scores z 24 and would glow.
-      for (const r of regs) map.setFeatureState({ source: "countries", id: r.region }, { z: r.mentions >= MIN_MENTIONS ? r.z : 0, mentions: r.mentions });
-
-      map.addSource("events", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: evs.map((e) => ({ type: "Feature", id: e.id, geometry: { type: "Point", coordinates: [e.lon, e.lat] }, properties: e })) },
-      });
+      map.addSource("events", { type: "geojson", data: EMPTY });
       map.addLayer({
         id: "events", type: "circle", source: "events",
         paint: {
@@ -89,10 +74,7 @@ export default function Globe() {
 
       // Primary feeds: quakes (size by magnitude) and non-Green GDACS alerts,
       // in a colour of their own so ground truth is never confused with coverage.
-      map.addSource("primary", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: prims.map((e) => ({ type: "Feature", id: e.id, geometry: { type: "Point", coordinates: [e.lon, e.lat] }, properties: { ...e, mag: e.props.mag ?? null, props: JSON.stringify(e.props) } })) },
-      });
+      map.addSource("primary", { type: "geojson", data: EMPTY });
       map.addLayer({
         id: "primary", type: "circle", source: "primary",
         paint: {
@@ -127,9 +109,42 @@ export default function Globe() {
       map.on("mouseenter", "events", () => { map.getCanvas().style.cursor = "pointer"; });
       map.on("mouseleave", "events", () => { map.getCanvas().style.cursor = ""; });
 
-      window.__newsradar = { ready: true, layers: ["countries-fill", "events", "primary"], regions: regs.length, events: evs.length, primary: prims.length };
+      const counts = await load(map);
+      window.__newsradar = { ready: true, layers: ["countries-fill", "events", "primary"], ...counts };
+      timer = setInterval(() => { if (!document.hidden) load(map); }, REFRESH_MS);
     });
-    return () => { map.remove(); mapRef.current = null; };
+
+    // Everything but the country polygons is re-fetched and swapped in place,
+    // so an open tab follows the database instead of freezing at page load.
+    async function load(m: MLMap) {
+      const [anomaly, top, prim, fresh] = await Promise.all([
+        fetch("/api/anomaly?kind=country").then((r) => r.json()),
+        fetch(`/api/events/top?hours=${HOURS}&limit=300`).then((r) => r.json()),
+        fetch(`/api/events/primary?hours=${PRIMARY_HOURS}`).then((r) => r.json()),
+        fetch("/api/freshness").then((r) => r.json()),
+      ]);
+      const regs: Region[] = anomaly.regions;
+      const evs: Ev[] = top.events;
+      const prims: Primary[] = prim.events;
+      setRegions(regs);
+      setEvents(evs);
+      setPrimary(prims);
+      setAsOf(fresh.fetched_at);
+      for (const r of regs) if (r.name) namesRef.current[r.region] = r.name;
+      // Clear first, or a region that dropped out of the window keeps its old tint.
+      m.removeFeatureState({ source: "countries" });
+      // Tint only regions with enough volume for z to mean something: a
+      // microstate going from 1 mention to 25 scores z 24 and would glow.
+      for (const r of regs) m.setFeatureState({ source: "countries", id: r.region }, { z: r.mentions >= MIN_MENTIONS ? r.z : 0, mentions: r.mentions });
+      (m.getSource("events") as maplibregl.GeoJSONSource).setData({ type: "FeatureCollection", features: evs.map((e) => ({ type: "Feature", id: e.id, geometry: { type: "Point", coordinates: [e.lon, e.lat] }, properties: e })) });
+      (m.getSource("primary") as maplibregl.GeoJSONSource).setData({ type: "FeatureCollection", features: prims.map((e) => ({ type: "Feature", id: e.id, geometry: { type: "Point", coordinates: [e.lon, e.lat] }, properties: { ...e, mag: e.props.mag ?? null, props: JSON.stringify(e.props) } })) });
+      return { regions: regs.length, events: evs.length, primary: prims.length };
+    }
+
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const onVisible = () => { if (!document.hidden && map.getSource("events")) load(map); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); map.remove(); mapRef.current = null; };
   }, []);
 
   useEffect(() => {
@@ -150,6 +165,7 @@ export default function Globe() {
         <div className="muted">Last {HOURS} h. Tint: share of world mentions vs the region&apos;s usual share over 30 days, as a z-score, regions with {MIN_MENTIONS}+ mentions. Dots: top {events.length} stories by first-window sources.</div>
         <div className="legend"><i /> z 1 → 5+ <b /> story <b style={{ background: "#b45309" }} /> quake M4.5+ <b style={{ background: "#7c3aed" }} /> GDACS alert</div>
         <div className="muted">{primary.length} primary events, last {PRIMARY_HOURS} h.</div>
+        <div className="muted" data-testid="as-of">{asOf ? `Coverage as of ${new Date(asOf).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : "Loading…"} · refreshes every 5 min</div>
         {hover ? (
           <>
             <table><tbody>
@@ -169,6 +185,8 @@ export default function Globe() {
     </>
   );
 }
+
+const EMPTY: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
 function firstSymbolLayer(map: MLMap): string | undefined {
   return map.getStyle().layers.find((l) => l.type === "symbol")?.id;
