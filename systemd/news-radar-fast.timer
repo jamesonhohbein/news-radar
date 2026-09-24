@@ -1,0 +1,11 @@
+[Unit]
+Description=news-radar fast feeds every 5 minutes
+
+[Timer]
+# Tsunami feeds hold only their latest bulletin; 5 min keeps the gap in which
+# one could be issued and replaced unseen short. Offset from the 15-min ingest.
+OnCalendar=*:01/5
+Persistent=true
+
+[Install]
+WantedBy=timers.target

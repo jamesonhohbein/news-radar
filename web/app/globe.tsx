@@ -24,7 +24,7 @@ type Ev = {
 type Daily = { day: string; mentions: number };
 type Primary = {
   id: number; source: string; external_id: string; added_at: string; geo_name: string | null; country: string;
-  lat: number; lon: number; url: string | null; props: { kind?: string; title?: string; alert?: string | null; mag?: number; population?: string | null; event?: string; severity?: string; expires?: string };
+  lat: number; lon: number; url: string | null; props: { kind?: string; title?: string; alert?: string | null; mag?: number; population?: string | null; event?: string; severity?: string; expires?: string; category?: string; centre?: string; magnitude?: number };
 };
 
 declare global { interface Window { __newsradar?: { ready: boolean; layers: string[]; regions: number; events: number; primary: number } } }
@@ -80,7 +80,7 @@ export default function Globe() {
         id: "primary", type: "circle", source: "primary",
         paint: {
           "circle-radius": ["case", ["==", ["get", "source"], "usgs"], ["interpolate", ["linear"], ["coalesce", ["get", "mag"], 4.5], 4.5, 4, 7.5, 16], 7],
-          "circle-color": ["match", ["get", "source"], "usgs", "#b45309", "nws", "#0e7490", "#7c3aed"],
+          "circle-color": ["match", ["get", "source"], "usgs", "#b45309", "nws", "#0e7490", "tsunami", "#be123c", "#7c3aed"],
           "circle-opacity": 0.75, "circle-stroke-color": "#fff", "circle-stroke-width": 1,
         },
       });
@@ -164,7 +164,7 @@ export default function Globe() {
       <div className="panel">
         <h1>news-radar</h1>
         <div className="muted">Last {HOURS} h. Tint: share of world mentions vs the region&apos;s usual share over 30 days, as a z-score, regions with {MIN_MENTIONS}+ mentions. Dots: top {events.length} stories by distinct outlets covering them in that window, reprints of one headline counted as one story.</div>
-        <div className="legend"><i /> z 1 → 5+ <b /> story <b style={{ background: "#b45309" }} /> quake M4.5+ <b style={{ background: "#7c3aed" }} /> GDACS alert <b style={{ background: "#0e7490" }} /> NWS severe</div>
+        <div className="legend"><i /> z 1 → 5+ <b /> story <b style={{ background: "#b45309" }} /> quake M4.5+ <b style={{ background: "#7c3aed" }} /> GDACS alert <b style={{ background: "#0e7490" }} /> NWS severe <b style={{ background: "#be123c" }} /> tsunami</div>
         <div className="muted">{primary.length} primary events, last {PRIMARY_HOURS} h.</div>
         <div className="muted" data-testid="as-of">{asOf ? `Coverage as of ${new Date(asOf).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : "Loading…"} · refreshes every 5 min</div>
         {hover ? (
@@ -209,6 +209,7 @@ function primaryHtml(p: Primary): string {
   const esc = (s: string | null | undefined) => (s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
   const when = new Date(p.added_at).toUTCString().slice(5, 22) + " UTC";
   const line2 = p.source === "usgs" ? `M${p.props.mag} earthquake`
+    : p.source === "tsunami" ? `Tsunami ${esc(p.props.category)} · ${esc(p.props.centre)}${p.props.magnitude ? ` · M${p.props.magnitude}` : ""}`
     : p.source === "nws" ? `${esc(p.props.event)} · ${esc(p.props.severity)} · until ${p.props.expires ? new Date(p.props.expires).toUTCString().slice(5, 22) + " UTC" : "?"}`
     : `${esc(p.props.alert)} ${esc(p.props.kind)} alert${p.props.population ? ` · ${esc(p.props.population)}` : ""}`;
   return `<div><strong>${esc(p.props.title || p.geo_name)}</strong><br>${line2}<br><span style="color:#666">${esc(p.source)} · ${when}</span>` +

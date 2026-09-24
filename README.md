@@ -27,7 +27,9 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 Then `scripts/load_countries.py` once, and on a schedule: `ingest.py
 catchup`, `headlines.py` and `ingest.py primary` every 15 minutes, and
 `rollup.py` hourly. `systemd/` has user units; symlink them into
-`~/.config/systemd/user/` and `systemctl --user enable --now` both timers.
+`~/.config/systemd/user/` and `systemctl --user enable --now` the three
+timers (`ingest`, `rollup`, and `fast`, which polls tsunami bulletins every
+5 minutes).
 
 The map:
 

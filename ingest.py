@@ -4,7 +4,8 @@
     ingest.py latest              # the newest GDELT export, if not already loaded
     ingest.py backfill --days 30  # everything in the master list since then
     ingest.py catchup             # files since the last one logged (what the timer runs)
-    ingest.py primary             # the feed adapters (USGS, GDACS): fetch, upsert, geocode
+    ingest.py primary             # the feed adapters (USGS, GDACS, NWS, tsunami): fetch, upsert, geocode
+    ingest.py primary --only tsunami   # one adapter (what news-radar-fast.timer runs)
     ingest.py backfill --days 30 --mentions   # Mentions files only (R18)
 
 catchup loads Mentions after Events for the same window, so a mention's event
@@ -23,13 +24,13 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 from newsradar import store
-from newsradar.adapters import gdacs, gdelt, nws, usgs
+from newsradar.adapters import gdacs, gdelt, nws, tsunami, usgs
 from newsradar.db import connect
 
 SOURCE = "gdelt-events"
 MENTIONS_SOURCE = "gdelt-mentions"
 GKG_SOURCE = "gdelt-gkg"
-FEEDS = (usgs, gdacs, nws)
+FEEDS = (usgs, gdacs, nws, tsunami)
 
 
 def load_files(conn, sid: int, files: list[str], workers: int = 4) -> tuple[int, int]:
@@ -137,12 +138,14 @@ def _fetch_or_none(file: str, attempts: int = 4) -> bytes | None:
             time.sleep(2 ** i)
 
 
-def load_feeds(conn) -> list[str]:
+def load_feeds(conn, only: set[str] | None = None) -> list[str]:
     """Each feed is one endpoint holding current state; the whole thing is
     fetched and upserted every run. fetch_log gets one row per run, keyed by
     kind and minute, so source_health can see the feed is alive."""
     out = []
     for mod in FEEDS:
+        if only and mod.KIND not in only:
+            continue
         try:
             sid = store.source_id(conn, mod.SOURCE)
         except SystemExit:
@@ -177,7 +180,8 @@ def main() -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("latest")
     sub.add_parser("catchup")
-    sub.add_parser("primary")
+    p = sub.add_parser("primary")
+    p.add_argument("--only", action="append", help="adapter KIND(s) to run, e.g. --only tsunami")
     b = sub.add_parser("backfill")
     b.add_argument("--days", type=int, default=30)
     b.add_argument("--mentions", action="store_true", help="Mentions files instead of Events")
@@ -185,7 +189,7 @@ def main() -> None:
 
     with connect() as conn:
         if args.cmd == "primary":
-            for line in load_feeds(conn):
+            for line in load_feeds(conn, set(args.only or ()) or None):
                 print(line)
             return
         sid = store.source_id(conn, SOURCE)
