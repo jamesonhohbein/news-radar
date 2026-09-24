@@ -19,6 +19,7 @@ type Ev = {
   actor1_name: string | null; actor2_name: string | null; geo_name: string | null; country: string;
   lat: number; lon: number; num_mentions: number; num_sources: number; url: string | null;
   title: string | null; site: string | null;
+  outlets: number; outlets_1h: number; window_mentions: number; sites: number;
 };
 type Daily = { day: string; mentions: number };
 type Primary = {
@@ -67,7 +68,7 @@ export default function Globe() {
       map.addLayer({
         id: "events", type: "circle", source: "events",
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["get", "num_sources"], 1, 3, 50, 14],
+          "circle-radius": ["interpolate", ["linear"], ["get", "outlets"], 2, 3, 150, 16],
           "circle-color": "#1d4ed8", "circle-opacity": 0.55, "circle-stroke-color": "#fff", "circle-stroke-width": 0.5,
         },
       });
@@ -162,7 +163,7 @@ export default function Globe() {
       <div id="map" ref={el} />
       <div className="panel">
         <h1>news-radar</h1>
-        <div className="muted">Last {HOURS} h. Tint: share of world mentions vs the region&apos;s usual share over 30 days, as a z-score, regions with {MIN_MENTIONS}+ mentions. Dots: top {events.length} stories by first-window sources.</div>
+        <div className="muted">Last {HOURS} h. Tint: share of world mentions vs the region&apos;s usual share over 30 days, as a z-score, regions with {MIN_MENTIONS}+ mentions. Dots: top {events.length} stories by distinct outlets covering them in that window, reprints of one headline counted as one story.</div>
         <div className="legend"><i /> z 1 → 5+ <b /> story <b style={{ background: "#b45309" }} /> quake M4.5+ <b style={{ background: "#7c3aed" }} /> GDACS alert</div>
         <div className="muted">{primary.length} primary events, last {PRIMARY_HOURS} h.</div>
         <div className="muted" data-testid="as-of">{asOf ? `Coverage as of ${new Date(asOf).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : "Loading…"} · refreshes every 5 min</div>
@@ -200,7 +201,7 @@ function popupHtml(p: Ev): string {
   const host = p.site || (p.url ? (() => { try { return new URL(p.url!).hostname; } catch { return p.url; } })() : "");
   const head = p.title ? `<strong>${esc(p.title)}</strong><br><span style="color:#666">${who}</span>` : `<strong>${who}</strong>`;
   return `<div>${head}<br>${esc(root)}${quad ? ` · ${esc(quad)}` : ""}<br>${esc(p.geo_name)}<br>` +
-    `<span style="color:#666">${p.num_sources} sources · ${p.num_mentions} mentions · ${new Date(p.added_at).toUTCString().slice(5, 22)} UTC</span>` +
+    `<span style="color:#666">${p.outlets} outlets in ${HOURS} h · ${p.outlets_1h} in the last hour${p.sites > 1 ? ` · ${p.sites} sites ran this headline` : ""}<br>first seen ${new Date(p.added_at).toUTCString().slice(5, 22)} UTC</span>` +
     (p.url ? `<br><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(host)}</a>` : "") + `</div>`;
 }
 
