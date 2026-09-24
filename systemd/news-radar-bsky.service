@@ -1,0 +1,13 @@
+[Unit]
+Description=news-radar: Bluesky Jetstream consumer (per-place counts only)
+After=docker.service network-online.target
+
+[Service]
+WorkingDirectory=%h/dev/homelab/news-radar
+ExecStart=%h/dev/homelab/news-radar/.venv/bin/python bsky_stream.py
+# Resumes from stream_cursor (Jetstream keeps about a day of history).
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

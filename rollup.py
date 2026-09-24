@@ -58,6 +58,17 @@ ON CONFLICT (wiki, title, hour) DO UPDATE
 SET edits = EXCLUDED.edits, editors = EXCLUDED.editors, created = EXCLUDED.created
 """
 
+# chatter_5min is written additively by the stream consumer; hourly is a
+# plain recompute from it, so re-running is safe.
+_CHATTER_HOURLY = """
+INSERT INTO chatter_hourly (source, place_id, hour, posts)
+SELECT source, place_id, date_trunc('hour', bucket), sum(posts)
+FROM chatter_5min
+WHERE bucket >= %(since)s
+GROUP BY 1, 2, 3
+ON CONFLICT (source, place_id, hour) DO UPDATE SET posts = EXCLUDED.posts
+"""
+
 _MENTION_HOURLY = """
 INSERT INTO mention_hourly (event_id, hour, mentions, sources)
 SELECT event_id, date_trunc('hour', mentioned_at), count(*), count(DISTINCT source_name)
@@ -144,6 +155,7 @@ def rollup(conn, since: datetime, until: datetime | None = None, anomaly: bool =
                                  FROM wiki_edit""").fetchone()[0]
         if wfirst:
             out["wiki_activity"] = conn.execute(_WIKI_ACTIVITY, {"since": max(since, wfirst)}).rowcount
+        out["chatter_hourly"] = conn.execute(_CHATTER_HOURLY, {"since": since}).rowcount
         out["daily"] = conn.execute(_DAILY, {"since": since}).rowcount
         if anomaly:
             out["anomaly"] = conn.execute(_ANOMALY, {"since": since, "until": until}).rowcount
@@ -163,6 +175,11 @@ def prune(conn) -> dict[str, int]:
                                       (now - timedelta(hours=RETAIN_MENTION_HOURS),)).rowcount,
             "wiki_activity": conn.execute("DELETE FROM wiki_activity WHERE hour < %s",
                                           (now - timedelta(days=RETAIN_EVENT_DAYS),)).rowcount,
+            "chatter_5min": conn.execute("DELETE FROM chatter_5min WHERE bucket < %s",
+                                         (now - timedelta(days=7),)).rowcount,
+            "chatter_hourly": conn.execute("DELETE FROM chatter_hourly WHERE hour < %s",
+                                           (now - timedelta(days=RETAIN_EVENT_DAYS),)).rowcount,
+            "bsky_uri": conn.execute("DELETE FROM bsky_uri WHERE at < %s", (now - timedelta(hours=48),)).rowcount,
             "firms_detection": conn.execute("DELETE FROM firms_detection WHERE acq_at < %s",
                                             (now - timedelta(days=RETAIN_GKG_DAYS),)).rowcount,
             "gkg_article": conn.execute("DELETE FROM gkg_article WHERE added_at < %s",   # cascades to gkg_location

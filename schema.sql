@@ -511,3 +511,68 @@ SELECT p.country, a.hour, count(*) AS pages, sum(a.editors) AS editors, sum(a.ed
 FROM wiki_activity a JOIN wiki_page p ON p.wiki = a.wiki AND p.title = a.title
 WHERE p.geom IS NOT NULL AND p.country <> ''
 GROUP BY p.country, a.hour;
+
+-- Gazetteer (R31): GeoNames cities15000, first-level divisions and
+-- countries, CC BY 4.0, via scripts/load_gazetteer.py (monthly).
+CREATE TABLE IF NOT EXISTS gazetteer_place (
+    id         BIGINT PRIMARY KEY,          -- GeoNames geonameid
+    name       TEXT   NOT NULL,
+    kind       TEXT   NOT NULL,             -- country | adm1 | city
+    iso2       TEXT   NOT NULL,
+    country    TEXT,                        -- FIPS, as GDELT codes it
+    adm1       TEXT,                        -- FIPS country + GeoNames admin1 code (USWA, AS02)
+    population BIGINT NOT NULL DEFAULT 0,
+    geom       geometry(Point, 4326)
+);
+CREATE TABLE IF NOT EXISTS gazetteer_name (
+    place_id BIGINT NOT NULL REFERENCES gazetteer_place(id) ON DELETE CASCADE,
+    name     TEXT   NOT NULL,
+    PRIMARY KEY (place_id, name)
+);
+-- Names that are common words in the stream itself: their lowercase form is
+-- at least as frequent as the capitalized one ("But", "Most", "Der").
+-- Measured by bsky_stream.py --calibrate.
+CREATE TABLE IF NOT EXISTS gazetteer_stop (
+    name        TEXT PRIMARY KEY,
+    capitalized INT  NOT NULL,
+    lowercase   INT  NOT NULL,
+    measured_at TIMESTAMPTZ NOT NULL
+);
+
+-- Bluesky (R31): per-place post counts, never post text.
+INSERT INTO source (kind, name, attention, expect_every) VALUES ('bluesky', 'bluesky-posts', false, '1 hour')
+ON CONFLICT (name) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS chatter_5min (
+    source   TEXT        NOT NULL,
+    place_id BIGINT      NOT NULL,
+    bucket   TIMESTAMPTZ NOT NULL,
+    posts    INT         NOT NULL,
+    PRIMARY KEY (source, place_id, bucket)
+);
+CREATE INDEX IF NOT EXISTS chatter_5min_bucket ON chatter_5min (bucket);
+
+CREATE TABLE IF NOT EXISTS chatter_hourly (
+    source   TEXT        NOT NULL,
+    place_id BIGINT      NOT NULL,
+    hour     TIMESTAMPTZ NOT NULL,
+    posts    INT         NOT NULL,
+    PRIMARY KEY (source, place_id, hour)
+);
+CREATE INDEX IF NOT EXISTS chatter_hourly_hour ON chatter_hourly (hour);
+
+-- Pointers to a few posts per place per hour for drill-down, 48 h. A
+-- delete event removes its row; the post itself is fetched live.
+CREATE TABLE IF NOT EXISTS bsky_uri (
+    uri      TEXT        PRIMARY KEY,
+    place_id BIGINT      NOT NULL,
+    at       TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS bsky_uri_place ON bsky_uri (place_id, at);
+
+-- Chatter by country per hour, for the detector and the map.
+CREATE OR REPLACE VIEW chatter_country_hourly AS
+SELECT c.source, g.country, c.hour, sum(c.posts) AS posts
+FROM chatter_hourly c JOIN gazetteer_place g ON g.id = c.place_id
+WHERE g.country IS NOT NULL
+GROUP BY 1, 2, 3;
