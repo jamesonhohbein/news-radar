@@ -368,8 +368,14 @@ WHERE NOT s.attention AND CASE s.kind
     -- Information means an earthquake happened and there is no threat.
     WHEN 'tsunami' THEN e.props->>'category' IS DISTINCT FROM 'Information'
                       AND e.added_at > now() - interval '24 hours'
+    -- Only elevated volcanoes are listed; one not seen lately has gone back to Green.
+    WHEN 'volcano' THEN (e.props->>'seen')::timestamptz > now() - interval '3 hours'
     ELSE false END;
 
 -- Tsunami bulletins (R25). Polled every 5 min by news-radar-fast.timer.
 INSERT INTO source (kind, name, attention, expect_every) VALUES ('tsunami', 'tsunami-bulletins', false, '5 minutes')
+ON CONFLICT (name) DO NOTHING;
+
+-- USGS elevated volcanoes (R26).
+INSERT INTO source (kind, name, attention) VALUES ('volcano', 'usgs-volcanoes', false)
 ON CONFLICT (name) DO NOTHING;
