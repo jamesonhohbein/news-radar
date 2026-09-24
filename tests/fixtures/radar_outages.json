@@ -1,0 +1,83 @@
+{
+ "success": true,
+ "result": {
+  "annotations": [
+   {
+    "id": "1201",
+    "asns": [],
+    "asnsDetails": [],
+    "dataSource": "ALL",
+    "description": "Nationwide internet shutdown during exams",
+    "endDate": null,
+    "entities": [],
+    "eventType": "OUTAGE",
+    "geoIds": [],
+    "linkedUrl": "https://x.com/CloudflareRadar/status/1",
+    "locations": [
+     "IQ"
+    ],
+    "locationsDetails": [
+     {
+      "code": "IQ",
+      "name": "Iraq"
+     }
+    ],
+    "origins": [],
+    "originsDetails": [],
+    "outage": {
+     "outageCause": "GOVERNMENT_DIRECTED",
+     "outageType": "NATIONWIDE"
+    },
+    "scope": "Iraq",
+    "startDate": "2026-09-24T03:00:00Z",
+    "tags": []
+   },
+   {
+    "id": "1199",
+    "asns": [
+     5650
+    ],
+    "asnsDetails": [
+     {
+      "asn": "5650",
+      "location": {
+       "code": "US",
+       "name": "United States"
+      },
+      "name": "FRONTIER-FRTR"
+     }
+    ],
+    "dataSource": "ALL",
+    "description": "Power outage after storm",
+    "endDate": "2026-09-20T12:00:00Z",
+    "entities": [],
+    "eventType": "OUTAGE",
+    "geoIds": [],
+    "linkedUrl": "",
+    "locations": [
+     "US",
+     "CA"
+    ],
+    "locationsDetails": [
+     {
+      "code": "US",
+      "name": "United States"
+     },
+     {
+      "code": "CA",
+      "name": "Canada"
+     }
+    ],
+    "origins": [],
+    "originsDetails": [],
+    "outage": {
+     "outageCause": "POWER_OUTAGE",
+     "outageType": "REGIONAL"
+    },
+    "scope": "Pacific Northwest",
+    "startDate": "2026-09-19T20:00:00Z",
+    "tags": []
+   }
+  ]
+ }
+}
