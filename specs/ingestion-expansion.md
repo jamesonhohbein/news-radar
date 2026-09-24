@@ -101,10 +101,13 @@ drawn as their own layer. Revisions update `props` in place unless noted.
   Alaska) and PTWC `PHEBAtom.xml`. Each holds only the latest bulletin, so
   polling every 5 min and keeping every new `urn:uuid` is the history.
   Point from `geo:lat`/`geo:long`.
-- **R26 Volcanoes.** USGS HANS `getElevatedVolcanoes` and
-  `notice/getNewestOrRecent` (about 5 notices/day, keyed on
-  `noticeIdentifier`), points from `vsc/api/volcanoApi/elevated`. A colour
-  code change is an event; a notice at the same level is `props` history.
+- **R26 Volcanoes.** USGS VSC `volcanoApi/elevated`: every volcano above
+  Green with its point, colour code, previous code, change date and latest
+  notice, in one call (changed at build, 2026-09-24, from the three HANS
+  endpoints). Rows are keyed `(vnum, codeChangeDate)`, so a colour change is
+  an event and a notice at the same level is `props` history. A volcano
+  back at Green leaves the list; `props.seen` going stale is how the map
+  drops it.
 - **R27 FIRMS fires, clustered.** The three VIIRS 24 h global CSVs (SNPP,
   NOAA-20, NOAA-21), no key needed. Measured about 180k detections/day,
   4.5 to 4.8 MB per file. No id: raw rows go to `firms_detection` keyed
