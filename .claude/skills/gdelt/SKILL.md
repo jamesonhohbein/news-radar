@@ -56,6 +56,10 @@ The web app and agent use the read-only `reader` role (10 s timeout).
 | `mention` (source `gdelt-mentions`) | raw (event, time, outlet), mentions of events we hold | 72 h |
 | `mention_hourly` | mentions and distinct outlets per event per hour | 90 d |
 | `event_growth` | view: mentions and outlets in the last 1 h and 6 h per event | |
+| `gkg_article` (source `gdelt-gkg`) | per article: URL, site, tone, V1 themes | 30 d |
+| `gkg_location` | every place an article names; type 1 is a country centroid and has no ADM1 | 30 d |
+| `theme_daily` | articles per theme per country or ADM1 per day | forever |
+| `theme_hourly` | articles per theme per country per hour | 90 d |
 | `story` | headline and site per URL with 2+ first-window sources | |
 | `attention_hourly` / `attention_daily` | events (first sightings), mentions and outlets (coverage that hour) per country or ADM1 | 90 d / forever |
 | `attention_anomaly` | hourly z-score vs same hour over 30 d, last 48 h | |
@@ -76,6 +80,12 @@ SELECT g.sources_1h, g.sources_6h, e.country, s.title
 FROM event_growth g JOIN event e ON e.id = g.event_id
 LEFT JOIN story s ON s.url = g.url AND s.status = 'ok'
 ORDER BY g.sources_1h DESC LIMIT 10;
+
+-- What a country's coverage is about today (GKG themes; TAX_ and WB_
+-- families are taxonomies and dominate the long tail).
+SELECT theme, articles FROM theme_daily
+WHERE region_kind = 'country' AND region = 'UP' AND day = current_date
+  AND theme NOT LIKE 'TAX\_%' ORDER BY articles DESC LIMIT 15;
 
 -- Top stories with headlines, one per URL.
 SELECT DISTINCT ON (e.url) e.num_sources, e.country, s.title, s.site

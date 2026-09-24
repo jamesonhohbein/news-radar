@@ -1,4 +1,4 @@
-"""GDELT 2.0 adapter: Events, and Mentions (R18).
+"""GDELT 2.0 adapter: Events, Mentions (R18) and GKG (R22).
 
 Every 15 minutes GDELT publishes export.CSV.zip: tab-separated, no header,
 61 columns in the order of the v2 codebook, pinned below as COLUMNS. Only
@@ -8,6 +8,11 @@ dropped, because a map cannot show them and the attention series is spatial.
 Mentions (`mentions.CSV.zip`, 16 columns) has one row per article that
 mentions an event, including events first seen days earlier. It is the only
 place later coverage appears; Events counts stop after the first window.
+
+GKG (`gkg.csv.zip`, 27 columns) has one row per article with every theme
+and every place it names. Rows run to hundreds of KB (quotes, entities,
+counts), so only id, date, site, URL, tone, V1 themes and V1 locations are
+read.
 
 Use https. The http host answers 301 and curl-style clients that do not
 follow redirects see an empty body, which looks like GDELT being down.
@@ -19,6 +24,7 @@ import io
 import urllib.request
 import zipfile
 from datetime import date, datetime, timezone
+from dataclasses import dataclass
 from typing import Iterable, Iterator
 
 from . import Event
@@ -54,6 +60,7 @@ def _get(url: str, timeout: int = 60) -> bytes:
 
 EXPORT = ".export.CSV.zip"
 MENTIONS = ".mentions.CSV.zip"
+GKG = ".gkg.csv.zip"
 
 
 def _files(listing: bytes, suffix: str = EXPORT) -> list[str]:
@@ -164,3 +171,60 @@ def parse_mention_rows(rows: Iterable[list[str]]) -> Iterator[tuple[str, datetim
             yield None
             continue
         yield row[0], t, row[4]
+
+
+@dataclass(frozen=True)
+class GkgLocation:
+    loc_type: int      # 1 country, 2 US state, 3 US city, 4 world city, 5 world ADM1
+    country: str       # FIPS, as Events codes it
+    adm1: str | None   # None for type 1, and when GDELT only knows the country
+    lat: float
+    lon: float
+
+
+@dataclass(frozen=True)
+class GkgArticle:
+    gkg_id: str
+    added_at: datetime
+    site: str | None
+    url: str | None
+    tone: float | None
+    themes: tuple[str, ...]
+    locations: tuple[GkgLocation, ...]
+
+
+def parse_gkg(blob: bytes) -> Iterator[GkgArticle | None]:
+    with zipfile.ZipFile(io.BytesIO(blob)) as z:
+        text = z.read(z.namelist()[0]).decode("utf-8", "replace")
+    yield from parse_gkg_lines(text.splitlines())
+
+
+def parse_gkg_lines(lines: Iterable[str]) -> Iterator[GkgArticle | None]:
+    """Split on tabs directly: GKG fields carry stray quotes that trip csv."""
+    for line in lines:
+        r = line.split("\t")
+        if len(r) < 16 or not r[0]:
+            yield None
+            continue
+        try:
+            added = datetime.strptime(r[1], "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+        except ValueError:
+            yield None
+            continue
+        themes = tuple(dict.fromkeys(t for t in r[7].split(";") if t))
+        locs = {}
+        for part in r[9].split(";"):
+            f = part.split("#")
+            if len(f) < 6 or not f[2] or not f[4] or not f[5]:
+                continue
+            try:
+                typ, lat, lon = int(f[0]), float(f[4]), float(f[5])
+            except ValueError:
+                continue
+            adm1 = f[3] if typ != 1 and f[3] and f[3] != f[2] else None
+            locs.setdefault((typ, f[2], adm1, lat, lon), GkgLocation(typ, f[2], adm1, lat, lon))
+        try:
+            tone = float(r[15].split(",")[0]) if r[15] else None
+        except ValueError:
+            tone = None
+        yield GkgArticle(r[0], added, r[3] or None, r[4] or None, tone, themes, tuple(locs.values()))

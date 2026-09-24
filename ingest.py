@@ -28,6 +28,7 @@ from newsradar.db import connect
 
 SOURCE = "gdelt-events"
 MENTIONS_SOURCE = "gdelt-mentions"
+GKG_SOURCE = "gdelt-gkg"
 FEEDS = (usgs, gdacs)
 
 
@@ -84,6 +85,30 @@ def load_mention_files(conn, msid: int, events_sid: int, files: list[str], worke
             try:
                 seen, kept = store.insert_mentions(conn, events_sid, rows())
                 store.log_fetch(conn, msid, file, seen + bad, kept)
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            kept_total += kept
+    return len(todo), kept_total
+
+
+def load_gkg_files(conn, gsid: int, files: list[str], workers: int = 4) -> tuple[int, int]:
+    """GKG files into gkg_article/gkg_location and the theme tables, one
+    commit per file so the additive theme counts match fetch_log exactly."""
+    done = store.already_fetched(conn, gsid, files)
+    todo = [f for f in files if f not in done]
+    kept_total = 0
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for file, blob in zip(todo, pool.map(_fetch_or_none, todo)):
+            if blob is None:
+                print(f"  {file}: fetch failed, skipped", file=sys.stderr)
+                continue
+            parsed = list(gdelt.parse_gkg(blob))
+            good = [a for a in parsed if a is not None]
+            try:
+                kept = store.insert_gkg(conn, good)
+                store.log_fetch(conn, gsid, file, len(parsed), kept)
                 conn.commit()
             except Exception:
                 conn.rollback()
@@ -176,6 +201,10 @@ def main() -> None:
             mfiles = gdelt.list_files(_since_last(conn, msid), gdelt.MENTIONS)
             n_files, n_rows = load_mention_files(conn, msid, sid, mfiles)
             print(f"catchup: {n_files} mentions files, {n_rows} mentions kept")
+            gsid = store.source_id(conn, GKG_SOURCE)
+            gfiles = gdelt.list_files(_since_last(conn, gsid), gdelt.GKG)
+            n_files, n_rows = load_gkg_files(conn, gsid, gfiles)
+            print(f"catchup: {n_files} gkg files, {n_rows} articles kept")
 
 
 if __name__ == "__main__":
