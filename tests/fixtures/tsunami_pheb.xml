@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+    <feed xmlns="http://www.w3.org/2005/Atom" xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#" xmlns:georss="http://www.georss.org/georss">
+    <id>urn:uuid:82293ee5-c2d6-4242-b759-8f2e95faf695</id><title>        TSUNAMI INFORMATION STATEMENT NUMBER   1        </title>
+    <updated>2026-09-18T13:25:30Z</updated>
+    <author>
+      <name>NWS PACIFIC TSUNAMI WARNING CENTER HONOLULU HI</name>
+<uri>https://www.tsunami.gov/</uri>
+     <email>ntwc@noaa.gov</email>
+    </author>
+<icon>https://www.tsunami.gov/images/favicon.ico</icon>
+<link type="application/atom+xml" rel="self" title="self" href="https://www.tsunami.gov/events/xml/PAAQAtom.xml"/>
+ <link rel="related" title="Energy Map" href="https://www.tsunami.gov/events/PHEB/2026/09/18/26261050/1/WECA42/ " type="image/jpeg" /> 
+
+   <entry>
+
+    <title>VICINITY OF PUERTO RICO</title><updated>2026-09-18T13:25:30Z</updated>
+<geo:lat>17.949</geo:lat>
+<geo:long>-66.937</geo:long>
+<summary type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml">
+     <strong>Category:</strong> Information<br/><strong>Bulletin Issue Time: </strong> 2026.09.18 13:25:30 UTC <br/><strong>Preliminary Magnitude: </strong>4.6(Ml)<br/><strong>Lat/Lon: </strong>17.949 / -66.937<br/><strong>Affected Region: </strong>VICINITY OF PUERTO RICO<br/><b>Note:</b>  <br/><strong>Definition: </strong><a href="https://www.tsunami.gov/events/PHEB/2026/09/18/26261050/1/WECA42/WECA42.txt">View bulletin</a><img src="https://www.tsunami.gov/events/PHEB/2026/09/18/26261050/1/WECA42/ " alt="Energy Map" /> 
+ </div></summary>
+    <id>urn:uuid:c0a19ab8-0979-4409-88fa-2d968585f94f</id><link rel="related" title="CapXML document" href="https://www.tsunami.gov/events/PHEB/2026/09/18/26261050/1/WECA42/PHEBCAP.xml" type="application/cap+xml" />
+<link rel="alternate" title="Bulletin" href="https://www.tsunami.gov/events/PHEB/2026/09/18/26261050/1/WECA42/WECA42.txt" type="application/xml" />
+</entry>
+</feed>
