@@ -44,3 +44,18 @@ test("map renders with both default layers", async ({ page }) => {
   expect(errors).toEqual([]);
   await expect(page.locator(".panel h1")).toHaveText("news-radar");
 });
+
+test("freshness reports the newest GDELT load, under 30 min old", async ({ request }) => {
+  const f = await (await request.get("/api/freshness")).json();
+  expect(f.fetched_at).toBeTruthy();
+  expect(Date.now() - new Date(f.fetched_at).getTime()).toBeLessThan(30 * 60 * 1000);
+});
+
+test("page shows the coverage stamp and re-fetches when the tab becomes visible", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => window.__newsradar?.ready === true, null, { timeout: 45_000 });
+  await expect(page.getByTestId("as-of")).toContainText("Coverage as of");
+  const refetch = page.waitForRequest((r) => r.url().includes("/api/freshness"));
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await refetch;
+});
