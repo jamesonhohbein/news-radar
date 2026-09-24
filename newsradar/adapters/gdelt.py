@@ -23,7 +23,7 @@ import csv
 import io
 import urllib.request
 import zipfile
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from dataclasses import dataclass
 from typing import Iterable, Iterator
 
@@ -81,7 +81,21 @@ def latest(suffix: str = EXPORT) -> str:
     return _files(_get(BASE + "lastupdate.txt"), suffix)[0]
 
 
+def recent_files(since: datetime, suffix: str = EXPORT, now: datetime | None = None) -> list[str]:
+    """File names for every 15-minute slot from since to now, generated rather
+    than listed: masterfilelist.txt is 128 MB (2026-09-24) and catchup ran it
+    every 15 minutes. A slot not published yet 404s and is retried next run."""
+    now = now or datetime.now(timezone.utc)
+    t = since.replace(minute=since.minute - since.minute % 15, second=0, microsecond=0)
+    out = []
+    while t <= now:
+        out.append(f"{t:%Y%m%d%H%M%S}{suffix}")
+        t += timedelta(minutes=15)
+    return out
+
+
 def list_files(since: datetime, suffix: str = EXPORT) -> list[str]:
+    """From the master list: for backfill only (it is a 128 MB download)."""
     files = _files(_get(BASE + "masterfilelist.txt", timeout=180), suffix)
     return [f for f in files if file_stamp(f) >= since]
 

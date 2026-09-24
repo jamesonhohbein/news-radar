@@ -196,7 +196,9 @@ detection content-blind and keeps third-party text out of the store.
   GDACS get theirs now, since they are already live.
 - **R33 Bandwidth is stated.** Steady state is about 7 GB/day down
   (Wikipedia ~5, Bluesky ~1 to 2 compressed, GKG ~0.35, the rest small),
-  about 210 GB/month.
+  about 210 GB/month. Measured at build: catchup had been downloading GDELT's 128 MB
+  `masterfilelist.txt` every 15 minutes (about 12 GB/day, three times that
+  once Mentions and GKG were added); it now generates slot names instead.
 
 ## Not in this spec
 
