@@ -97,3 +97,4 @@ terms. GDELT, USGS, NWS, NOAA tsunami centres and NASA FIRMS are open or
 public domain (FIRMS asks for citation). GeoNames (country codes) is
 CC BY 4.0. **IODA is "Copyright Georgia Tech Research Corporation. All
 Rights Reserved"**: fine to read for your own instance, not to republish.
+Cloudflare Radar (optional, needs a token) is CC BY-NC 4.0.

@@ -130,8 +130,10 @@ drawn as their own layer. Revisions update `props` in place unless noted.
   until admin-1 shapes exist, and the query window is 6 h because a 7-day
   window came back truncated to old starts.
 - **R29 Cloudflare Radar outages.** `radar/annotations/outages`, needs a
-  free account token with Radar Read, set in `.env`. Without the token the
-  adapter is disabled and logs once. Data is CC BY-NC 4.0; the README says
+  free account token with Radar Read, set in `.env`. The source is seeded
+  disabled; setting the token and enabling the row turns it on. Without a
+  token each run logs `radar: skipped`. Schema taken from Cloudflare's API
+  reference; not yet seen live. Data is CC BY-NC 4.0; the README says
   so. Overlaps IODA and is kept because it names cause (power, cable cut,
   government shutdown) where IODA does not.
 

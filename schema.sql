@@ -378,6 +378,8 @@ WHERE NOT s.attention AND CASE s.kind
     -- Multi-day region "outages" are chronic measurement conditions.
     WHEN 'ioda' THEN (e.props->>'end')::timestamptz > now() - interval '3 hours'
                       AND e.added_at > now() - interval '48 hours'
+    -- Ongoing, or ended in the last 3 h.
+    WHEN 'radar' THEN coalesce((e.props->>'end')::timestamptz, 'infinity') > now() - interval '3 hours'
     ELSE false END;
 
 -- Tsunami bulletins (R25). Polled every 5 min by news-radar-fast.timer.
@@ -447,3 +449,8 @@ CREATE TABLE IF NOT EXISTS ioda_region (
     ne_region_id TEXT,
     fetched_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Cloudflare Radar outage annotations (R29). Seeded disabled so an instance
+-- without a token does not show it stale; enable after setting the token.
+INSERT INTO source (kind, name, attention, expect_every, enabled) VALUES ('radar', 'cloudflare-radar', false, '1 day', false)
+ON CONFLICT (name) DO NOTHING;

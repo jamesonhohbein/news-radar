@@ -24,7 +24,7 @@ type Ev = {
 type Daily = { day: string; mentions: number };
 type Primary = {
   id: number; source: string; external_id: string; added_at: string; geo_name: string | null; country: string;
-  lat: number; lon: number; url: string | null; props: { kind?: string; title?: string; alert?: string | null; mag?: number; population?: string | null; event?: string; severity?: string; expires?: string; category?: string; centre?: string; magnitude?: number; color?: string; color_prev?: string; synopsis?: string; detections?: number; area_km2?: number; frp_sum?: number; last_seen?: string; entity_type?: string; datasource?: string; duration_s?: number; region_name?: string };
+  lat: number; lon: number; url: string | null; props: { kind?: string; title?: string; alert?: string | null; mag?: number; population?: string | null; event?: string; severity?: string; expires?: string; category?: string; centre?: string; magnitude?: number; color?: string; color_prev?: string; synopsis?: string; detections?: number; area_km2?: number; frp_sum?: number; last_seen?: string; entity_type?: string; datasource?: string; duration_s?: number; region_name?: string; cause?: string; outage_type?: string };
 };
 
 declare global { interface Window { __newsradar?: { ready: boolean; layers: string[]; regions: number; events: number; primary: number } } }
@@ -80,7 +80,7 @@ export default function Globe() {
         id: "primary", type: "circle", source: "primary",
         paint: {
           "circle-radius": ["case", ["==", ["get", "source"], "usgs"], ["interpolate", ["linear"], ["coalesce", ["get", "mag"], 4.5], 4.5, 4, 7.5, 16], 7],
-          "circle-color": ["match", ["get", "source"], "usgs", "#b45309", "nws", "#0e7490", "tsunami", "#be123c", "volcano", "#c2410c", "firms", "#ea580c", "ioda", "#475569", "#7c3aed"],
+          "circle-color": ["match", ["get", "source"], "usgs", "#b45309", "nws", "#0e7490", "tsunami", "#be123c", "volcano", "#c2410c", "firms", "#ea580c", "ioda", "#475569", "radar", "#475569", "#7c3aed"],
           "circle-opacity": 0.75, "circle-stroke-color": "#fff", "circle-stroke-width": 1,
         },
       });
@@ -209,6 +209,7 @@ function primaryHtml(p: Primary): string {
   const esc = (s: string | null | undefined) => (s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
   const when = new Date(p.added_at).toUTCString().slice(5, 22) + " UTC";
   const line2 = p.source === "usgs" ? `M${p.props.mag} earthquake`
+    : p.source === "radar" ? `Internet outage · ${esc(p.props.outage_type)} · cause ${esc(p.props.cause)} (Cloudflare Radar)`
     : p.source === "ioda" ? `Internet outage (${esc(p.props.entity_type)}) · ${esc(p.props.datasource)} · ${Math.round((p.props.duration_s ?? 0) / 360) / 10} h so far`
     : p.source === "firms" ? `Fire · ${p.props.detections} detections · ${p.props.area_km2} km² · last seen ${p.props.last_seen ? new Date(p.props.last_seen).toUTCString().slice(5, 22) + " UTC" : "?"}`
     : p.source === "volcano" ? `Volcano ${esc(p.props.color)} (was ${esc(p.props.color_prev)})${p.props.synopsis ? `<br>${esc(p.props.synopsis)}` : ""}`

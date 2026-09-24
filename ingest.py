@@ -24,13 +24,13 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 from newsradar import store
-from newsradar.adapters import firms, gdacs, gdelt, ioda, nws, tsunami, usgs, volcano
+from newsradar.adapters import firms, gdacs, gdelt, ioda, nws, radar, tsunami, usgs, volcano
 from newsradar.db import connect
 
 SOURCE = "gdelt-events"
 MENTIONS_SOURCE = "gdelt-mentions"
 GKG_SOURCE = "gdelt-gkg"
-FEEDS = (usgs, gdacs, nws, tsunami, volcano, firms, ioda)
+FEEDS = (usgs, gdacs, nws, tsunami, volcano, firms, ioda, radar)
 
 
 def load_files(conn, sid: int, files: list[str], workers: int = 4) -> tuple[int, int]:
@@ -166,6 +166,9 @@ def load_feeds(conn, only: set[str] | None = None) -> list[str]:
             continue
         try:
             blob = mod.fetch()
+        except radar.NotConfigured as exc:
+            out.append(f"{mod.KIND}: skipped ({exc})")
+            continue
         except Exception as exc:  # noqa: BLE001
             out.append(f"{mod.KIND}: fetch failed: {exc}")
             continue
