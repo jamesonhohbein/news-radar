@@ -147,14 +147,24 @@ CREATE TABLE IF NOT EXISTS watch (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Per-source health: is each adapter still delivering.
-CREATE OR REPLACE VIEW source_health AS
+-- Per-source health (R32): is each adapter still delivering. expect_every is
+-- how often the source should land rows; stale means no fetch that kept rows
+-- in three of those intervals, which catches both a stopped timer and a feed
+-- that runs and returns nothing.
+ALTER TABLE source ADD COLUMN IF NOT EXISTS expect_every INTERVAL NOT NULL DEFAULT '15 minutes';
+
+DROP VIEW IF EXISTS source_health;
+CREATE VIEW source_health AS
 SELECT s.name,
        s.kind,
        s.enabled,
-       max(f.fetched_at)                                       AS last_fetch,
-       count(*) FILTER (WHERE f.fetched_at > now() - interval '1 day') AS files_24h,
-       sum(f.rows_kept) FILTER (WHERE f.fetched_at > now() - interval '1 day') AS rows_24h
+       s.expect_every,
+       max(f.fetched_at)                                                  AS last_fetch,
+       max(f.fetched_at) FILTER (WHERE f.rows_kept > 0)                   AS last_rows,
+       count(f.*) FILTER (WHERE f.fetched_at > now() - interval '1 day')  AS fetches_24h,
+       coalesce(sum(f.rows_kept) FILTER (WHERE f.fetched_at > now() - interval '1 day'), 0) AS rows_24h,
+       s.enabled AND coalesce(max(f.fetched_at) FILTER (WHERE f.rows_kept > 0), '-infinity')
+                     < now() - 3 * s.expect_every                         AS stale
 FROM source s
 LEFT JOIN fetch_log f ON f.source_id = s.id
 GROUP BY s.id;
