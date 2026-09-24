@@ -34,6 +34,18 @@ the date the article says the event happened; anniversaries and
 retrospectives put events years in the past. `added_at` is when the source
 saw it.
 
+**Attention mentions come from the Mentions buffer, not the event row.**
+`attention_hourly.events` counts first sightings from `event`;
+`.mentions` and `.sources` count coverage in that hour from `mention`, a 72 h
+raw buffer, and are only recomputed for hours the buffer still covers. So a
+backfill of Mentions must run with `news-radar-rollup.timer` stopped (its
+prune would eat the buffer mid-load), then `rollup.py --full --no-prune`.
+Attention rows older than the Mentions backfill still carry the old
+first-window sums.
+
+**`norm_title()` holds dash escapes, not literal dashes.** Headlines use en
+and em dashes as site separators; the regex spells them `\u2013\u2014`.
+
 **Anomaly is materialized, not a view.** The 30-way same-hour self-join is
 seconds per run in `rollup.py` and would be seconds per map load as a view.
 It covers only the last 48 hours and is meaningless until 30 days are loaded.

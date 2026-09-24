@@ -83,9 +83,9 @@ class T16UpsertAndAttention(DBCase):
         self.assertEqual(self.one("SELECT (props->>'mag')::float, country FROM event WHERE external_id='us7000tivi'"), (5.1, "NZ"))
 
     def test_primaries_do_not_count_as_attention(self):
-        for kind in ("usgs", "gdelt"):
+        for name in ("usgs-quakes", "gdelt-events"):
             self.conn.execute("""INSERT INTO event (source_id, external_id, added_at, country, geom, num_mentions, num_sources, num_articles)
-                                 VALUES ((SELECT id FROM source WHERE kind=%s), %s, now(), 'FR', ST_SetSRID(ST_MakePoint(2, 48), 4326), 10, 1, 1)""", (kind, kind))
+                                 VALUES ((SELECT id FROM source WHERE name=%s), %s, now(), 'FR', ST_SetSRID(ST_MakePoint(2, 48), 4326), 10, 1, 1)""", (name, name))
         self.conn.commit()
         rollup.rollup(self.conn, __import__("datetime").datetime.now(timezone.utc) - timedelta(hours=2), anomaly=False)
-        self.assertEqual(self.one("SELECT sum(mentions) FROM attention_hourly WHERE region='FR'")[0], 10)
+        self.assertEqual(self.one("SELECT sum(events) FROM attention_hourly WHERE region='FR'")[0], 1)

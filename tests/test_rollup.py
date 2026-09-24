@@ -17,16 +17,24 @@ def _ev(conn, added, country, adm1, mentions, sources, n=1):
 
 class T3Rollup(DBCase):
     def test_hourly_and_daily_match_hand_count(self):
-        _ev(self.conn, H0, "US", "USWA", 4, 2, n=3)                      # 3 events, 12 mentions, 6 sources
+        # events come from first sightings; mentions and sources from the buffer.
+        _ev(self.conn, H0, "US", "USWA", 4, 2, n=3)                      # 3 events
         _ev(self.conn, H0 + timedelta(minutes=30), "US", "USCA", 10, 5)   # same hour, other ADM1
         _ev(self.conn, H0 + timedelta(hours=1), "US", "USWA", 1, 1)       # next hour
         _ev(self.conn, H0 + timedelta(days=1), "FR", "FR00", 7, 3)        # next day
+        ids = dict(self.conn.execute("SELECT adm1 || added_at::text, min(id) FROM event GROUP BY 1").fetchall())
+        wa, ca = ids["USWA" + str(H0).replace("+00:00", "+00")], ids["USCA" + str(H0 + timedelta(minutes=30)).replace("+00:00", "+00")]
+        fr = ids["FR00" + str(H0 + timedelta(days=1)).replace("+00:00", "+00")]
+        for at, eid, src in ((H0, wa, "a"), (H0, wa, "b"), (H0, ca, "a"),            # US H0: 3 mentions, 2 outlets
+                             (H0 + timedelta(hours=1), wa, "c"),                     # US H0+1h
+                             (H0 + timedelta(days=1), fr, "d"), (H0 + timedelta(days=1), fr, "d")):
+            self.conn.execute("INSERT INTO mention VALUES (%s, %s, %s)", (eid, at, src))
         self.conn.commit()
         rollup.rollup(self.conn, H0 - timedelta(days=1), anomaly=False)
-        self.assertEqual(self.one("SELECT events, mentions, sources FROM attention_hourly WHERE region_kind='country' AND region='US' AND hour=%s", (H0,)), (4, 22, 11))
-        self.assertEqual(self.one("SELECT events, mentions, sources FROM attention_hourly WHERE region_kind='adm1' AND region='USWA' AND hour=%s", (H0,)), (3, 12, 6))
-        self.assertEqual(self.one("SELECT events, mentions FROM attention_daily WHERE region_kind='country' AND region='US' AND day='2026-09-20'"), (5, 23))
-        self.assertEqual(self.one("SELECT events, mentions FROM attention_daily WHERE region_kind='country' AND region='FR' AND day='2026-09-21'"), (1, 7))
+        self.assertEqual(self.one("SELECT events, mentions, sources FROM attention_hourly WHERE region_kind='country' AND region='US' AND hour=%s", (H0,)), (4, 3, 2))
+        self.assertEqual(self.one("SELECT events, mentions, sources FROM attention_hourly WHERE region_kind='adm1' AND region='USWA' AND hour=%s", (H0,)), (3, 2, 2))
+        self.assertEqual(self.one("SELECT events, mentions FROM attention_daily WHERE region_kind='country' AND region='US' AND day='2026-09-20'"), (5, 4))
+        self.assertEqual(self.one("SELECT events, mentions, sources FROM attention_daily WHERE region_kind='country' AND region='FR' AND day='2026-09-21'"), (1, 2, 1))
         # 3 country rows (US H0, US H0+1h, FR +1d) and 4 adm1 rows; a re-run adds none.
         rollup.rollup(self.conn, H0 - timedelta(days=1), anomaly=False)
         self.assertEqual(self.one("SELECT count(*) FROM attention_hourly")[0], 7)

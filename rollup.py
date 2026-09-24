@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Derive the attention series from event, then the anomaly table.
+"""Derive the attention series from event and the mention buffer, then the
+anomaly table.
+
+events counts first sightings (from event). mentions and sources count
+coverage in that hour (from the raw mention buffer, R19), so a story that
+keeps running keeps its region lit. They are only recomputed for hours the
+buffer still covers; older rows keep what was computed while it did.
 
     rollup.py            # last 48 h of hourly and daily, anomaly for last 48 h, prune
     rollup.py --full     # every hour in the table (after a backfill)
@@ -18,16 +24,35 @@ from newsradar.db import connect
 RETAIN_EVENT_DAYS = 90
 RETAIN_HOURLY_DAYS = 90
 RETAIN_ANOMALY_DAYS = 7
+RETAIN_MENTION_HOURS = 72
 
-_HOURLY = """
+_HOURLY_EVENTS = """
 INSERT INTO attention_hourly (region_kind, region, hour, events, mentions, sources)
-SELECT %(kind)s, {region}, date_trunc('hour', added_at), count(*), sum(num_mentions), sum(num_sources)
+SELECT %(kind)s, {region}, date_trunc('hour', added_at), count(*), 0, 0
 FROM event
 WHERE added_at >= %(since)s AND {region} IS NOT NULL AND {region} <> ''
   AND source_id IN (SELECT id FROM source WHERE attention)
 GROUP BY 2, 3
+ON CONFLICT (region_kind, region, hour) DO UPDATE SET events = EXCLUDED.events
+"""
+
+_HOURLY_MENTIONS = """
+INSERT INTO attention_hourly (region_kind, region, hour, events, mentions, sources)
+SELECT %(kind)s, e.{region}, date_trunc('hour', m.mentioned_at), 0, count(*), count(DISTINCT m.source_name)
+FROM mention m JOIN event e ON e.id = m.event_id
+WHERE m.mentioned_at >= %(since)s AND e.{region} IS NOT NULL AND e.{region} <> ''
+GROUP BY 2, 3
 ON CONFLICT (region_kind, region, hour) DO UPDATE
-SET events = EXCLUDED.events, mentions = EXCLUDED.mentions, sources = EXCLUDED.sources
+SET mentions = EXCLUDED.mentions, sources = EXCLUDED.sources
+"""
+
+_MENTION_HOURLY = """
+INSERT INTO mention_hourly (event_id, hour, mentions, sources)
+SELECT event_id, date_trunc('hour', mentioned_at), count(*), count(DISTINCT source_name)
+FROM mention
+WHERE mentioned_at >= %(since)s
+GROUP BY 1, 2
+ON CONFLICT (event_id, hour) DO UPDATE SET mentions = EXCLUDED.mentions, sources = EXCLUDED.sources
 """
 
 _DAILY = """
@@ -85,10 +110,22 @@ ON CONFLICT (region_kind, region) DO UPDATE SET name = EXCLUDED.name
 def rollup(conn, since: datetime, until: datetime | None = None, anomaly: bool = True) -> dict[str, int]:
     until = until or datetime.now(timezone.utc) + timedelta(hours=1)
     out = {}
+    # Whole hours only: a window starting mid-hour would re-upsert that hour
+    # from a partial count. Same for the buffer's first hour after a prune.
+    since = since.replace(minute=0, second=0, microsecond=0)
+    first = conn.execute("""SELECT CASE WHEN min(mentioned_at) = date_trunc('hour', min(mentioned_at))
+                                        THEN min(mentioned_at)
+                                        ELSE date_trunc('hour', min(mentioned_at)) + interval '1 hour' END
+                            FROM mention""").fetchone()[0]
+    msince = max(since, first) if first else None
     with conn.transaction():
         for kind, region in (("country", "country"), ("adm1", "adm1")):
-            out[f"hourly_{kind}"] = conn.execute(_HOURLY.format(region=region),
+            out[f"hourly_{kind}"] = conn.execute(_HOURLY_EVENTS.format(region=region),
                                                  {"kind": kind, "since": since}).rowcount
+            if msince:
+                conn.execute(_HOURLY_MENTIONS.format(region=region), {"kind": kind, "since": msince})
+        if msince:
+            out["mention_hourly"] = conn.execute(_MENTION_HOURLY, {"since": msince}).rowcount
         out["daily"] = conn.execute(_DAILY, {"since": since}).rowcount
         if anomaly:
             out["anomaly"] = conn.execute(_ANOMALY, {"since": since, "until": until}).rowcount
@@ -102,6 +139,10 @@ def prune(conn) -> dict[str, int]:
         return {
             "event": conn.execute("DELETE FROM event WHERE added_at < %s",
                                   (now - timedelta(days=RETAIN_EVENT_DAYS),)).rowcount,
+            "mention": conn.execute("DELETE FROM mention WHERE mentioned_at < %s",
+                                    (now - timedelta(hours=RETAIN_MENTION_HOURS),)).rowcount,
+            "mention_hourly": conn.execute("DELETE FROM mention_hourly WHERE hour < %s",
+                                           (now - timedelta(days=RETAIN_EVENT_DAYS),)).rowcount,
             "hourly": conn.execute("DELETE FROM attention_hourly WHERE hour < %s",
                                    (now - timedelta(days=RETAIN_HOURLY_DAYS),)).rowcount,
             "anomaly": conn.execute("DELETE FROM attention_anomaly WHERE hour < %s",
