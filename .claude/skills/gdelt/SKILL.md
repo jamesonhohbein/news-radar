@@ -16,7 +16,12 @@ Adapter: `newsradar/adapters/gdelt.py` (column order pinned there as
 - `lastupdate.txt` lists the newest three files, one line each as
   `size md5 url`: `*.export.CSV.zip` (Events), `*.mentions.CSV.zip`,
   `*.gkg.csv.zip`. `masterfilelist.txt` lists every file since 2015 and
-  drives backfill.
+  drives backfill. **It is 128 MB**; never fetch it on a timer. Slot names
+  are predictable (`YYYYMMDDHHMMSS` at :00 :15 :30 :45 UTC), so recent
+  files are generated, not listed.
+- A file can be listed in `lastupdate.txt` before the CDN serves it (GKG
+  returned 404 for an hour on 2026-09-24). Catchup re-tries anything in
+  the last 6 h that is not in `fetch_log`.
 - **https only.** `lastupdate.txt` itself prints `http://` URLs. The http
   host answers 301 and a client that does not follow redirects saves an
   empty file, which looks exactly like GDELT being down. Rewrite the scheme.

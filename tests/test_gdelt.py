@@ -51,3 +51,13 @@ class T2Idempotent(DBCase):
         self.assertEqual((first, second), (18, 0))
         self.assertEqual(self.one("SELECT count(*) FROM event")[0], 18)
         self.assertEqual(self.one("SELECT ST_Y(geom), ST_X(geom) FROM event WHERE external_id='1323962893'"), (35.0, 105.0))
+
+
+class T2RecentFiles(DBCase.__mro__[1]):
+    def test_slots_are_generated_not_listed(self):
+        from datetime import timedelta
+        now = datetime(2026, 9, 24, 8, 7, tzinfo=timezone.utc)
+        files = gdelt.recent_files(now - timedelta(hours=1), gdelt.GKG, now=now)
+        self.assertEqual(files, ["20260924070000.gkg.csv.zip", "20260924071500.gkg.csv.zip",
+                                 "20260924073000.gkg.csv.zip", "20260924074500.gkg.csv.zip",
+                                 "20260924080000.gkg.csv.zip"])

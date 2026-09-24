@@ -23,6 +23,12 @@ will bite an agent working here.
 **GDELT over https only.** The http host answers 301 and a non-following
 client sees an empty body, which looks exactly like the service being down.
 
+**Never list `masterfilelist.txt` on a timer.** It is 128 MB (2026-09-24).
+Catchup generates the last 6 h of 15-minute slot names instead
+(`gdelt.recent_files`), tries each, and skips what `fetch_log` holds, so a
+file GDELT lists before its CDN serves it (GKG did this for an hour) is
+retried rather than stranded. The master list is for `backfill` only.
+
 **Per-file commits are load-bearing in `ingest.py`.** `store.insert_events`
 stages through a temp table with `ON COMMIT DROP`. Inside
 `conn.transaction()` that would be a savepoint (a SELECT has already opened

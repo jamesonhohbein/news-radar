@@ -119,10 +119,12 @@ def load_gkg_files(conn, gsid: int, files: list[str], workers: int = 4) -> tuple
 
 
 def _since_last(conn, sid: int) -> datetime:
-    # Six hours covers a sleep or a GDELT outage; beyond that use backfill.
-    row = conn.execute("SELECT max(file) FROM fetch_log WHERE source_id = %s", (sid,)).fetchone()
-    floor = datetime.now(timezone.utc) - timedelta(hours=6)
-    return max(gdelt.file_stamp(row[0]), floor) if row[0] else floor
+    """Always the last six hours: files already in fetch_log are skipped, so
+    this re-tries any file that failed (GDELT sometimes lists a GKG file
+    before its CDN serves it, measured 2026-09-24) even after later files
+    have loaded. Starting from the newest logged file would strand it.
+    Beyond six hours, use backfill."""
+    return datetime.now(timezone.utc) - timedelta(hours=6)
 
 
 def _fetch_or_none(file: str, attempts: int = 4) -> bytes | None:
@@ -220,15 +222,15 @@ def main() -> None:
         elif args.cmd == "backfill":
             files = gdelt.list_files(datetime.now(timezone.utc) - timedelta(days=args.days))
         else:
-            files = gdelt.list_files(_since_last(conn, sid))
+            files = gdelt.recent_files(_since_last(conn, sid))
         n_files, n_rows = load_files(conn, sid, files)
         print(f"{args.cmd}: {n_files} new files, {n_rows} events inserted")
         if args.cmd == "catchup":
-            mfiles = gdelt.list_files(_since_last(conn, msid), gdelt.MENTIONS)
+            mfiles = gdelt.recent_files(_since_last(conn, msid), gdelt.MENTIONS)
             n_files, n_rows = load_mention_files(conn, msid, sid, mfiles)
             print(f"catchup: {n_files} mentions files, {n_rows} mentions kept")
             gsid = store.source_id(conn, GKG_SOURCE)
-            gfiles = gdelt.list_files(_since_last(conn, gsid), gdelt.GKG)
+            gfiles = gdelt.recent_files(_since_last(conn, gsid), gdelt.GKG)
             n_files, n_rows = load_gkg_files(conn, gsid, gfiles)
             print(f"catchup: {n_files} gkg files, {n_rows} articles kept")
 
