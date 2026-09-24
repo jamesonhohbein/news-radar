@@ -155,18 +155,29 @@ detection content-blind and keeps third-party text out of the store.
   as such and rechecked after 7 days. Measured: 2 of 18 sampled edited
   pages had coordinates, one of them a school shooting article created
   minutes after the event. Only geotagged pages enter the rate series.
-- **R31 Bluesky.** Jetstream `app.bsky.feed.post`, no auth, zstd
-  compression on. Measured off-peak: 26 posts/s, about 2.2M posts/day and
-  1.9 GB/day uncompressed. Posts carry no geo, so place is found by
-  gazetteer match, not a model: GeoNames `cities15000` plus country and
-  ADM1 names, including alternate names in the post's declared `langs`.
-  Stored: `chatter_5min(source, place_id, bucket, posts)` and up to 20 post
-  `at://` URIs per place per bucket for drill-down, fetched live on
-  display. Text is never stored. A delete event removes its URI.
-  Ambiguous names ("Georgia", "Jordan", "Paris") are kept, because the
-  detector scores each place against its own baseline, so a name that is
-  always noisy only fires when it is unusually noisy. The gazetteer reloads monthly from GeoNames' daily-updated dump. The
-  GeoNames licence is CC BY 4.0, credited in the README. No model call, local or remote.
+- **R31 Bluesky.** Jetstream `app.bsky.feed.post`, no auth. Measured: about
+  27 posts/s, roughly 2.2M posts/day and 1.9 GB/day uncompressed (zstd needs
+  Jetstream's own dictionary, so it is off). Posts carry no geo, so place is
+  found by gazetteer match, not a model: GeoNames `cities15000`, first-level
+  divisions and countries with all their alternate names, case-sensitive,
+  word-bounded in spaced scripts, one place per name (country, then the most
+  populous city, then division). The gazetteer reloads monthly from GeoNames.
+  Built 2026-09-24 with three measured changes:
+  - **Stoplist from the stream.** A name whose lowercase form is at least as
+    common in posts as its capitalized form is a word ("But", "Der"; also the
+    cities Nice, Split, Reading). `--calibrate` measures it; 596 names on the
+    first run. Short all-caps alternates (airport codes: "BBC" matched Bay
+    City) and short kana transliterations (ライ inside ライブ) are dropped.
+    Person names (Burnham, David, Chad) remain, which is why counts are only
+    read against each place's own baseline.
+  - **Storage split.** About 300 distinct places per 30 s made one row per
+    place per 5 min for 90 days too large: `chatter_5min` is kept 7 days and
+    rolled into `chatter_hourly` for 90 days.
+  - **Pointers apart from counts.** Up to 20 post URIs per place per hour
+    go to `bsky_uri` for 48 h, not into the count rows. A delete event
+    removes its URI. Text is never stored.
+  No model call, local or remote. GeoNames is CC BY 4.0, credited in the
+  README.
 
 ### Operations
 

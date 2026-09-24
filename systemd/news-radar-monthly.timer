@@ -1,0 +1,10 @@
+[Unit]
+Description=news-radar reference data, monthly
+
+[Timer]
+OnCalendar=monthly
+RandomizedDelaySec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
