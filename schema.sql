@@ -380,6 +380,9 @@ WHERE NOT s.attention AND CASE s.kind
                       AND e.added_at > now() - interval '48 hours'
     -- Ongoing, or ended in the last 3 h.
     WHEN 'radar' THEN coalesce((e.props->>'end')::timestamptz, 'infinity') > now() - interval '3 hours'
+    -- UCDP runs about a month behind, so 60 days by event date shows the
+    -- latest release and the one before it (~2k events).
+    WHEN 'ucdp' THEN e.occurred_on > current_date - 60
     ELSE false END;
 
 -- Tsunami bulletins (R25). Polled every 5 min by news-radar-fast.timer.
@@ -576,3 +579,23 @@ SELECT c.source, g.country, c.hour, sum(c.posts) AS posts
 FROM chatter_hourly c JOIN gazetteer_place g ON g.id = c.place_id
 WHERE g.country IS NOT NULL
 GROUP BY 1, 2, 3;
+
+-- UCDP candidate events (R35): organised violence with fatality estimates,
+-- monthly CSV releases. expect_every 12 days makes it stale after 36 days
+-- without a new file, one missed monthly release.
+INSERT INTO source (kind, name, attention, expect_every) VALUES ('ucdp', 'ucdp-candidate', false, '12 days')
+ON CONFLICT (name) DO NOTHING;
+
+-- VIEWS conflict forecasts (R36): predicted state-based fatalities per
+-- country and month, 36 months ahead, one run a month. Not events.
+INSERT INTO source (kind, name, attention, expect_every) VALUES ('views', 'views-forecast', false, '12 days')
+ON CONFLICT (name) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS conflict_forecast (
+    run        TEXT NOT NULL,      -- VIEWS run name, fatalities003_2026_08_t01
+    country    TEXT NOT NULL,      -- FIPS, mapped from VIEWS isoab
+    month      DATE NOT NULL,      -- first of the forecast month
+    fatalities REAL NOT NULL,      -- main_mean: predicted state-based deaths
+    p_any      REAL,               -- main_dich: probability of any (25+) deaths
+    PRIMARY KEY (run, country, month)
+);

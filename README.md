@@ -31,7 +31,8 @@ catchup`, `headlines.py` and `ingest.py primary` every 15 minutes, and
 timers (`ingest`, `rollup`, and `fast`, which polls tsunami bulletins every
 5 minutes). `news-radar-wiki.service` and
 `news-radar-bsky.service` are long-running consumers of Wikipedia's edit
-stream and Bluesky's Jetstream, and `news-radar-monthly.timer` reloads the
+stream and Bluesky's Jetstream, and `news-radar-slow.timer` polls UCDP and VIEWS for
+their monthly releases (`ingest.py slow`), `news-radar-monthly.timer` reloads the
 GeoNames country codes and gazetteer; enable them the same way. Before the
 first Bluesky run: `scripts/load_gazetteer.py`, then
 `bsky_stream.py --calibrate 900`.
@@ -56,6 +57,7 @@ positron, no key). `/api/anomaly`, `/api/events/top` and
 | `country_shape` | Natural Earth 110m polygons by FIPS code, for reverse geocoding sources that give a point but no country. Loaded by `scripts/load_countries.py` |
 | `attention_hourly`, `attention_daily` | Events, mentions and sources per country and per ADM1. Hourly kept 90 days, daily forever |
 | `attention_anomaly` | Each of the last 48 hours against the same hour of day over the trailing 30 days: mean, sd, z. Materialized hourly by `rollup.py` |
+| `conflict_forecast` | VIEWS predicted state-based fatalities per country and month, 36 months ahead, one set per monthly run, kept forever. Not events |
 | `fetch_log` | Every file loaded, with rows seen and kept. A gap here is a gap in the series |
 | `story` | Headline and site per story URL, fetched from the page after each ingest for URLs at 2+ first-window sources; failures retry 3 times, 6 h apart |
 | `source`, `alert`, `watch` | Adapter registry (`attention` says whether a source's events count as coverage); what the detector has sent (later phase); reserved |
@@ -106,3 +108,7 @@ a few post URIs are stored.
 **IODA is "Copyright Georgia Tech Research Corporation. All
 Rights Reserved"**: fine to read for your own instance, not to republish.
 Cloudflare Radar (optional, needs a token) is CC BY-NC 4.0.
+UCDP candidate events are CC BY 4.0 (Uppsala Conflict Data Program).
+VIEWS forecasts (Uppsala and PRIO) are free through their API with no
+stated data licence; its model code is CC BY-NC 4.0, so treat the
+forecasts as non-commercial and credit VIEWS.

@@ -1,0 +1,10 @@
+[Unit]
+Description=news-radar monthly releases, polled daily
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=2h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

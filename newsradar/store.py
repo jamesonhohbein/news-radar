@@ -29,12 +29,14 @@ def already_fetched(conn: psycopg.Connection, sid: int, files: Iterable[str]) ->
     return {r[0] for r in rows}
 
 
-def insert_events(conn: psycopg.Connection, sid: int, events: Iterable[Event], update: bool = False) -> int:
+def insert_events(conn: psycopg.Connection, sid: int, events: Iterable[Event], update: bool = False,
+                  keep: tuple[str, ...] = ()) -> int:
     """COPY into a temp table, then INSERT ... ON CONFLICT. COPY is an order
     of magnitude faster than executemany for a backfill, and the temp-table
     hop is what makes the conflict clause possible. update=True is for feed
     adapters whose events are revised in place (a quake's magnitude, an
-    alert's level): the row is refreshed rather than skipped."""
+    alert's level): the row is refreshed rather than skipped. keep names
+    columns an update must not touch (UCDP's added_at is first sight)."""
     with conn.cursor() as cur:
         cur.execute("CREATE TEMP TABLE staging (LIKE event INCLUDING DEFAULTS) ON COMMIT DROP")
         cur.execute("ALTER TABLE staging DROP COLUMN id, DROP COLUMN geom, DROP COLUMN source_id, "
@@ -49,7 +51,7 @@ def insert_events(conn: psycopg.Connection, sid: int, events: Iterable[Event], u
             return 0
         cols = [c for c in _COLS if c not in ("lat", "lon")]
         # On update, keep a geocoded country when the adapter sends none.
-        conflict = ("DO UPDATE SET " + ", ".join(f"{c} = EXCLUDED.{c}" for c in cols if c not in ("external_id", "country"))
+        conflict = ("DO UPDATE SET " + ", ".join(f"{c} = EXCLUDED.{c}" for c in cols if c not in ("external_id", "country", *keep))
                     + ", geom = EXCLUDED.geom"
                     + ", country = CASE WHEN EXCLUDED.country = '' THEN event.country ELSE EXCLUDED.country END") if update else "DO NOTHING"
         cur.execute(f"""
