@@ -7,6 +7,7 @@
     ingest.py primary             # the feed adapters (USGS, GDACS, NWS, tsunami): fetch, upsert, geocode
     ingest.py primary --only tsunami   # one adapter (what news-radar-fast.timer runs)
     ingest.py backfill --days 30 --mentions   # Mentions files only (R18)
+    ingest.py slow                # monthly releases (UCDP, VIEWS), polled daily (R37)
 
 catchup loads Mentions after Events for the same window, so a mention's event
 is already in the table when its row arrives.
@@ -24,13 +25,15 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 from newsradar import store
-from newsradar.adapters import firms, gdacs, gdelt, ioda, nws, radar, tsunami, usgs, volcano
+from newsradar.adapters import firms, gdacs, gdelt, ioda, nws, radar, tsunami, ucdp, usgs, views, volcano
 from newsradar.db import connect
 
 SOURCE = "gdelt-events"
 MENTIONS_SOURCE = "gdelt-mentions"
 GKG_SOURCE = "gdelt-gkg"
 FEEDS = (usgs, gdacs, nws, tsunami, volcano, firms, ioda, radar)
+# Monthly releases, polled daily by news-radar-slow.timer.
+SLOW = (ucdp, views)
 
 
 def load_files(conn, sid: int, files: list[str], workers: int = 4) -> tuple[int, int]:
@@ -140,12 +143,12 @@ def _fetch_or_none(file: str, attempts: int = 4) -> bytes | None:
             time.sleep(2 ** i)
 
 
-def load_feeds(conn, only: set[str] | None = None) -> list[str]:
+def load_feeds(conn, only: set[str] | None = None, mods: tuple = FEEDS) -> list[str]:
     """Each feed is one endpoint holding current state; the whole thing is
     fetched and upserted every run. fetch_log gets one row per run, keyed by
     kind and minute, so source_health can see the feed is alive."""
     out = []
-    for mod in FEEDS:
+    for mod in mods:
         if only and mod.KIND not in only:
             continue
         try:
@@ -203,9 +206,14 @@ def main() -> None:
     b = sub.add_parser("backfill")
     b.add_argument("--days", type=int, default=30)
     b.add_argument("--mentions", action="store_true", help="Mentions files instead of Events")
+    sub.add_parser("slow")
     args = ap.parse_args()
 
     with connect() as conn:
+        if args.cmd == "slow":
+            for line in load_feeds(conn, mods=SLOW):
+                print(line)
+            return
         if args.cmd == "primary":
             for line in load_feeds(conn, set(args.only or ()) or None):
                 print(line)

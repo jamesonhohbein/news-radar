@@ -13,5 +13,6 @@ html, body { margin: 0; height: 100%; font: 14px/1.4 system-ui, sans-serif; colo
 .legend { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; margin-top: 6px; font-size: 11px; }
 .legend i { display: inline-block; width: 40px; height: 8px; background: linear-gradient(90deg, rgba(200,30,30,0), rgba(200,30,30,.85)); }
 .legend b { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #1d4ed8; }
+.tint { margin-top: 6px; font-size: 12px; }
 .maplibregl-popup-content { color: #111; font-size: 12px; max-width: 280px; }
 .maplibregl-popup-content a { word-break: break-all; }

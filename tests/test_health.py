@@ -25,3 +25,13 @@ class T30SourceHealth(DBCase):
         self._log("gdacs-alerts", "c", 50, 390)
         self.assertTrue(self._stale("gdacs-alerts"))
         self.conn.rollback()
+
+
+class T35SlowSources(DBCase):
+    def test_monthly_sources_expect_a_release_a_month(self):
+        got = dict(self.conn.execute(
+            "SELECT name, expect_every FROM source_health WHERE name IN ('ucdp-candidate', 'views-forecast')").fetchall())
+        self.assertEqual(set(got), {"ucdp-candidate", "views-forecast"})
+        # Stale is three intervals without rows: 36 days, one missed release.
+        for every in got.values():
+            self.assertEqual(3 * every.days, 36)
