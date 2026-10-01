@@ -22,9 +22,16 @@ type Ev = {
   outlets: number; outlets_1h: number; window_mentions: number; sites: number;
 };
 type Daily = { day: string; mentions: number };
+type Forecast = { country: string; fatalities: number; p_any: number | null };
+type Tint = "attention" | "forecast";
+// Same 1..5 scale for both tints so one interpolation serves; forecast deaths
+// are log-scaled (0 invisible, 10 -> 2, 1,000 -> 4, 10,000+ full).
+const TINT_COLOR: Record<Tint, string> = { attention: "200,30,30", forecast: "91,33,182" };
+const fillColor = (t: Tint) => ["interpolate", ["linear"], ["coalesce", ["feature-state", "z"], 0], 1, `rgba(${TINT_COLOR[t]},0)`, 5, `rgba(${TINT_COLOR[t]},0.85)`];
+const VIOLENCE: Record<number, string> = { 1: "state-based", 2: "non-state", 3: "one-sided, against civilians" };
 type Primary = {
-  id: number; source: string; external_id: string; added_at: string; geo_name: string | null; country: string;
-  lat: number; lon: number; url: string | null; props: { kind?: string; title?: string; alert?: string | null; mag?: number; population?: string | null; event?: string; severity?: string; expires?: string; category?: string; centre?: string; magnitude?: number; color?: string; color_prev?: string; synopsis?: string; detections?: number; area_km2?: number; frp_sum?: number; last_seen?: string; entity_type?: string; datasource?: string; duration_s?: number; region_name?: string; cause?: string; outage_type?: string };
+  id: number; source: string; external_id: string; added_at: string; occurred_on: string; geo_name: string | null; country: string;
+  lat: number; lon: number; url: string | null; props: { kind?: string; title?: string; alert?: string | null; mag?: number; population?: string | null; event?: string; severity?: string; expires?: string; category?: string; centre?: string; magnitude?: number; color?: string; color_prev?: string; synopsis?: string; detections?: number; area_km2?: number; frp_sum?: number; last_seen?: string; entity_type?: string; datasource?: string; duration_s?: number; region_name?: string; cause?: string; outage_type?: string; type_of_violence?: number; best?: number; low?: number; high?: number; dyad_name?: string; code_status?: string; where_prec?: number; date_end?: string };
 };
 
 declare global { interface Window { __newsradar?: { ready: boolean; layers: string[]; regions: number; events: number; primary: number } } }
@@ -39,6 +46,11 @@ export default function Globe() {
   const [hover, setHover] = useState<{ fips: string; name: string } | null>(null);
   const [series, setSeries] = useState<Daily[]>([]);
   const [asOf, setAsOf] = useState<string | null>(null);
+  const [forecast, setForecast] = useState<Forecast[]>([]);
+  const [tint, setTint] = useState<Tint>("attention");
+  const tintRef = useRef<Tint>("attention");
+  const regionsRef = useRef<Region[]>([]);
+  const forecastRef = useRef<Forecast[]>([]);
 
   useEffect(() => {
     if (!el.current || mapRef.current) return;
@@ -59,7 +71,7 @@ export default function Globe() {
         id: "countries-fill", type: "fill", source: "countries",
         paint: {
           // z below 1 is invisible; 6 and up is the full tint. Peak z over the window.
-          "fill-color": ["interpolate", ["linear"], ["coalesce", ["feature-state", "z"], 0], 1, "rgba(200,30,30,0)", 5, "rgba(200,30,30,0.85)"],
+          "fill-color": fillColor("attention") as maplibregl.ExpressionSpecification,
           "fill-opacity": 1,
         },
       }, firstSymbolLayer(map));
@@ -79,8 +91,11 @@ export default function Globe() {
       map.addLayer({
         id: "primary", type: "circle", source: "primary",
         paint: {
-          "circle-radius": ["case", ["==", ["get", "source"], "usgs"], ["interpolate", ["linear"], ["coalesce", ["get", "mag"], 4.5], 4.5, 4, 7.5, 16], 7],
-          "circle-color": ["match", ["get", "source"], "usgs", "#b45309", "nws", "#0e7490", "tsunami", "#be123c", "volcano", "#c2410c", "firms", "#ea580c", "ioda", "#475569", "radar", "#475569", "#7c3aed"],
+          "circle-radius": ["case",
+            ["==", ["get", "source"], "usgs"], ["interpolate", ["linear"], ["coalesce", ["get", "mag"], 4.5], 4.5, 4, 7.5, 16],
+            ["==", ["get", "source"], "ucdp"], ["interpolate", ["linear"], ["coalesce", ["get", "best"], 0], 0, 2.5, 10, 5, 100, 12],
+            7],
+          "circle-color": ["match", ["get", "source"], "usgs", "#b45309", "nws", "#0e7490", "tsunami", "#be123c", "volcano", "#c2410c", "firms", "#ea580c", "ioda", "#475569", "radar", "#475569", "ucdp", "#111827", "#7c3aed"],
           "circle-opacity": 0.75, "circle-stroke-color": "#fff", "circle-stroke-width": 1,
         },
       });
@@ -118,11 +133,12 @@ export default function Globe() {
     // Everything but the country polygons is re-fetched and swapped in place,
     // so an open tab follows the database instead of freezing at page load.
     async function load(m: MLMap) {
-      const [anomaly, top, prim, fresh] = await Promise.all([
+      const [anomaly, top, prim, fresh, fc] = await Promise.all([
         fetch("/api/anomaly?kind=country").then((r) => r.json()),
         fetch(`/api/events/top?hours=${HOURS}&limit=300`).then((r) => r.json()),
         fetch(`/api/events/primary?hours=${PRIMARY_HOURS}`).then((r) => r.json()),
         fetch("/api/freshness").then((r) => r.json()),
+        fetch("/api/forecast?months=1").then((r) => r.json()),
       ]);
       const regs: Region[] = anomaly.regions;
       const evs: Ev[] = top.events;
@@ -131,14 +147,13 @@ export default function Globe() {
       setEvents(evs);
       setPrimary(prims);
       setAsOf(fresh.fetched_at);
+      setForecast(fc.countries);
+      regionsRef.current = regs;
+      forecastRef.current = fc.countries;
       for (const r of regs) if (r.name) namesRef.current[r.region] = r.name;
-      // Clear first, or a region that dropped out of the window keeps its old tint.
-      m.removeFeatureState({ source: "countries" });
-      // Tint only regions with enough volume for z to mean something: a
-      // microstate going from 1 mention to 25 scores z 24 and would glow.
-      for (const r of regs) m.setFeatureState({ source: "countries", id: r.region }, { z: r.mentions >= MIN_MENTIONS ? r.z : 0, mentions: r.mentions });
+      applyTint(m, tintRef.current, regs, fc.countries);
       (m.getSource("events") as maplibregl.GeoJSONSource).setData({ type: "FeatureCollection", features: evs.map((e) => ({ type: "Feature", id: e.id, geometry: { type: "Point", coordinates: [e.lon, e.lat] }, properties: e })) });
-      (m.getSource("primary") as maplibregl.GeoJSONSource).setData({ type: "FeatureCollection", features: prims.map((e) => ({ type: "Feature", id: e.id, geometry: { type: "Point", coordinates: [e.lon, e.lat] }, properties: { ...e, mag: e.props.mag ?? null, props: JSON.stringify(e.props) } })) });
+      (m.getSource("primary") as maplibregl.GeoJSONSource).setData({ type: "FeatureCollection", features: prims.map((e) => ({ type: "Feature", id: e.id, geometry: { type: "Point", coordinates: [e.lon, e.lat] }, properties: { ...e, mag: e.props.mag ?? null, best: e.props.best ?? null, props: JSON.stringify(e.props) } })) });
       return { regions: regs.length, events: evs.length, primary: prims.length };
     }
 
@@ -149,6 +164,14 @@ export default function Globe() {
   }, []);
 
   useEffect(() => {
+    tintRef.current = tint;
+    const m = mapRef.current;
+    if (!m || !m.getLayer("countries-fill")) return;
+    m.setPaintProperty("countries-fill", "fill-color", fillColor(tint) as maplibregl.ExpressionSpecification);
+    applyTint(m, tint, regionsRef.current, forecastRef.current);
+  }, [tint]);
+
+  useEffect(() => {
     if (!hover) return;
     let live = true;
     fetch(`/api/attention/daily?kind=country&region=${hover.fips}&days=30`).then((r) => r.json()).then((d) => { if (live) setSeries(d.series); });
@@ -157,29 +180,41 @@ export default function Globe() {
 
   const hr = hover ? regions.find((r) => r.region === hover.fips) : undefined;
   const top = regions.filter((r) => r.mentions >= MIN_MENTIONS).slice(0, 8);
+  const hf = hover ? forecast.find((f) => f.country === hover.fips) : undefined;
 
   return (
     <>
       <div id="map" ref={el} />
       <div className="panel">
         <h1>news-radar</h1>
-        <div className="muted">Last {HOURS} h. Tint: share of world mentions vs the region&apos;s usual share over 30 days, as a z-score, regions with {MIN_MENTIONS}+ mentions. Dots: top {events.length} stories by distinct outlets covering them in that window, reprints of one headline counted as one story.</div>
-        <div className="legend"><i /> z 1 → 5+ <b /> story <b style={{ background: "#b45309" }} /> quake M4.5+ <b style={{ background: "#7c3aed" }} /> GDACS alert <b style={{ background: "#0e7490" }} /> NWS severe <b style={{ background: "#be123c" }} /> tsunami <b style={{ background: "#c2410c" }} /> volcano <b style={{ background: "#ea580c" }} /> fire 50+ detections <b style={{ background: "#475569" }} /> internet outage</div>
+        <div className="tint" data-testid="tint">
+          Tint: <label><input type="radio" name="tint" checked={tint === "attention"} onChange={() => setTint("attention")} /> attention</label>{" "}
+          <label><input type="radio" name="tint" checked={tint === "forecast"} onChange={() => setTint("forecast")} /> conflict forecast</label>
+        </div>
+        <div className="muted">{tint === "forecast"
+          ? <>Tint: VIEWS predicted state-based conflict deaths this month, log scale. </>
+          : <>Last {HOURS} h. Tint: share of world mentions vs the region&apos;s usual share over 30 days, as a z-score, regions with {MIN_MENTIONS}+ mentions. </>}Dots: top {events.length} stories by distinct outlets covering them in that window, reprints of one headline counted as one story.</div>
+        <div className="legend"><i /> z 1 → 5+ <b /> story <b style={{ background: "#b45309" }} /> quake M4.5+ <b style={{ background: "#7c3aed" }} /> GDACS alert <b style={{ background: "#0e7490" }} /> NWS severe <b style={{ background: "#be123c" }} /> tsunami <b style={{ background: "#c2410c" }} /> volcano <b style={{ background: "#ea580c" }} /> fire 50+ detections <b style={{ background: "#475569" }} /> internet outage <b style={{ background: "#111827" }} /> UCDP conflict deaths, 60 days</div>
         <div className="muted">{primary.length} primary events, last {PRIMARY_HOURS} h.</div>
         <div className="muted" data-testid="as-of">{asOf ? `Coverage as of ${new Date(asOf).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : "Loading…"} · refreshes every 5 min</div>
         {hover ? (
           <>
             <table><tbody>
               <tr><td><strong>{hover.name}</strong></td><td className="num">{hr ? `z ${hr.z.toFixed(1)} · ${hr.mentions} vs ${hr.expected} expected` : "no activity"}</td></tr>
+              {hf ? <tr><td>forecast deaths, this month</td><td className="num">{Math.round(hf.fatalities)}{hf.p_any != null ? ` · p ${hf.p_any.toFixed(2)}` : ""}</td></tr> : null}
             </tbody></table>
             <Spark data={series} />
             <div className="muted">Daily mentions, 30 days</div>
           </>
         ) : (
           <table><tbody>
-            {top.map((r) => (
-              <tr key={r.region}><td>{namesRef.current[r.region] ?? r.region}</td><td className="num">z {r.z.toFixed(1)} · {r.mentions}</td></tr>
-            ))}
+            {tint === "forecast"
+              ? forecast.slice(0, 8).map((f) => (
+                <tr key={f.country}><td>{namesRef.current[f.country] ?? f.country}</td><td className="num">{Math.round(f.fatalities)} forecast deaths</td></tr>
+              ))
+              : top.map((r) => (
+                <tr key={r.region}><td>{namesRef.current[r.region] ?? r.region}</td><td className="num">z {r.z.toFixed(1)} · {r.mentions}</td></tr>
+              ))}
           </tbody></table>
         )}
       </div>
@@ -188,6 +223,18 @@ export default function Globe() {
 }
 
 const EMPTY: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+
+function applyTint(m: MLMap, tint: Tint, regs: Region[], fc: Forecast[]) {
+  // Clear first, or a region that dropped out of the window keeps its old tint.
+  m.removeFeatureState({ source: "countries" });
+  if (tint === "forecast") {
+    for (const f of fc) m.setFeatureState({ source: "countries", id: f.country }, { z: 1 + Math.log10(1 + f.fatalities) });
+    return;
+  }
+  // Tint only regions with enough volume for z to mean something: a
+  // microstate going from 1 mention to 25 scores z 24 and would glow.
+  for (const r of regs) m.setFeatureState({ source: "countries", id: r.region }, { z: r.mentions >= MIN_MENTIONS ? r.z : 0, mentions: r.mentions });
+}
 
 function firstSymbolLayer(map: MLMap): string | undefined {
   return map.getStyle().layers.find((l) => l.type === "symbol")?.id;
@@ -209,6 +256,7 @@ function primaryHtml(p: Primary): string {
   const esc = (s: string | null | undefined) => (s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
   const when = new Date(p.added_at).toUTCString().slice(5, 22) + " UTC";
   const line2 = p.source === "usgs" ? `M${p.props.mag} earthquake`
+    : p.source === "ucdp" ? `${p.props.best} killed (${p.props.low}–${p.props.high}) · ${esc(VIOLENCE[p.props.type_of_violence ?? 0] ?? "")} violence<br>${esc(p.geo_name)} · ${String(p.occurred_on).slice(0, 10)}${p.props.date_end && p.props.date_end !== String(p.occurred_on).slice(0, 10) ? ` to ${p.props.date_end}` : ""}${p.props.code_status && p.props.code_status !== "Clear" ? `<br>UCDP: ${esc(p.props.code_status)}` : ""}${(p.props.where_prec ?? 0) >= 6 ? " · location is a country centroid" : ""}`
     : p.source === "radar" ? `Internet outage · ${esc(p.props.outage_type)} · cause ${esc(p.props.cause)} (Cloudflare Radar)`
     : p.source === "ioda" ? `Internet outage (${esc(p.props.entity_type)}) · ${esc(p.props.datasource)} · ${Math.round((p.props.duration_s ?? 0) / 360) / 10} h so far`
     : p.source === "firms" ? `Fire · ${p.props.detections} detections · ${p.props.area_km2} km² · last seen ${p.props.last_seen ? new Date(p.props.last_seen).toUTCString().slice(5, 22) + " UTC" : "?"}`

@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     `SELECT * FROM primary_live
       WHERE source <> 'usgs' OR added_at > now() - make_interval(hours => $1)
       ORDER BY added_at DESC
-      LIMIT 1000`,
+      LIMIT 5000`,
     [hours],
   );
   return NextResponse.json({ hours, events: data });

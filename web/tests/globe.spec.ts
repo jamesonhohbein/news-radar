@@ -20,9 +20,18 @@ test("primary events carry props and no Green alerts", async ({ request }) => {
   const p = await (await request.get("/api/events/primary?hours=168")).json();
   expect(p.events.length).toBeGreaterThan(0);
   for (const e of p.events) {
-    expect(["usgs", "gdacs", "nws", "tsunami", "volcano", "firms", "ioda", "radar"]).toContain(e.source);
+    expect(["usgs", "gdacs", "nws", "tsunami", "volcano", "firms", "ioda", "radar", "ucdp"]).toContain(e.source);
     expect(e.props.alert ?? "").not.toBe("Green");
   }
+});
+
+test("forecast serves the newest VIEWS run", async ({ request }) => {
+  const f = await (await request.get("/api/forecast?months=1")).json();
+  expect(f.run).toMatch(/^fatalities/);
+  expect(f.countries.length).toBeGreaterThan(100);
+  const deaths = f.countries.map((x: { fatalities: number }) => x.fatalities);
+  expect(deaths).toEqual([...deaths].sort((a: number, b: number) => b - a));
+  expect((await (await request.get("/api/forecast?months=999")).json()).months).toBe(36);
 });
 
 test("clamps and rejects bad params", async ({ request }) => {
