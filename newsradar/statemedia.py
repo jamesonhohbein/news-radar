@@ -315,4 +315,14 @@ def report(conn) -> dict[str, list[tuple]]:
         WHERE i.kind = 'host' AND NOT EXISTS (
             SELECT 1 FROM state_media_article a WHERE a.host = i.value AND a.added_at > now() - interval '7 days')
         ORDER BY 1, 2, 3, 4""").fetchall()
-    return {"no_host": no_host, "silent_host": silent}
+    # Collected channels (adapters/telegram.py R45) that yield nothing (R48).
+    telegram = conn.execute("""
+        SELECT o.typology, o.country, o.name, i.value,
+               CASE WHEN c.preview IS FALSE THEN 'no preview' ELSE 'no post in 7 days' END
+        FROM state_outlet_id i JOIN state_outlet o ON o.id = i.outlet_id
+        LEFT JOIN tg_channel c ON c.handle = i.value
+        WHERE i.kind = 'telegram' AND i.value ~ '^[A-Za-z][A-Za-z0-9_]{3,31}$' AND lower(i.value) NOT LIKE '%bot'
+          AND (c.preview IS FALSE OR NOT EXISTS (
+              SELECT 1 FROM tg_post p WHERE p.handle = i.value AND p.posted_at > now() - interval '7 days'))
+        ORDER BY 5, 1, 2, 3, 4""").fetchall()
+    return {"no_host": no_host, "silent_host": silent, "telegram": telegram}

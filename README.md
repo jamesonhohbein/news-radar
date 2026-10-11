@@ -59,6 +59,7 @@ positron, no key). `/api/anomaly`, `/api/events/top` and
 | `attention_anomaly` | Each of the last 48 hours against the same hour of day over the trailing 30 days: mean, sd, z. Materialized hourly by `rollup.py` |
 | `conflict_forecast` | VIEWS predicted state-based fatalities per country and month, 36 months ahead, one set per monthly run, kept forever. Not events |
 | `state_outlet`, `state_outlet_id` | Government-run and public media outlets with their State Media Monitor typology (SC state-controlled, CaPu/CaPr captured, ISF/ISM/ISFM/IP independent public), and their hostnames, Telegram, YouTube and X handles from Wikidata and `data/state_media_ids.csv`. `state_media_article` is GKG articles joined to their outlet. Loaded monthly by `scripts/load_state_media.py`; `--report` lists coverage gaps |
+| `tg_channel`, `tg_post` | Public posts, with text, from the registry's Telegram channels via the `t.me/s` web preview, every 15 minutes. The one place the store keeps third-party text: registry channels only, government broadcasts, never arbitrary users. `state_telegram_link` joins post links to registered outlets |
 | `fetch_log` | Every file loaded, with rows seen and kept. A gap here is a gap in the series |
 | `story` | Headline and site per story URL, fetched from the page after each ingest for URLs at 2+ first-window sources; failures retry 3 times, 6 h apart |
 | `source`, `alert`, `watch` | Adapter registry (`attention` says whether a source's events count as coverage); what the detector has sent (later phase); reserved |

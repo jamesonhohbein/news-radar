@@ -11,3 +11,5 @@ ExecStart=%h/dev/homelab/news-radar/.venv/bin/python ingest.py catchup
 ExecStart=-%h/dev/homelab/news-radar/.venv/bin/python headlines.py
 # Primary feeds (USGS, GDACS): whole-feed upsert, cheap, same cadence.
 ExecStart=-%h/dev/homelab/news-radar/.venv/bin/python ingest.py primary
+# State media Telegram channels (specs/state-telegram.md), about a minute.
+ExecStart=-%h/dev/homelab/news-radar/.venv/bin/python scripts/collect_telegram.py

@@ -643,3 +643,43 @@ FROM gkg_article a
 CROSS JOIN LATERAL unnest(host_suffixes(a.site)) AS s(suffix)
 JOIN state_outlet_id i ON i.kind = 'host' AND i.value = s.suffix
 JOIN state_outlet o ON o.id = i.outlet_id;
+
+-- State media Telegram channels (specs/state-telegram.md). The one table set
+-- that stores text: public posts by registry channels only (R47).
+INSERT INTO source (kind, name, attention, expect_every) VALUES ('telegram', 'telegram-state', false, '1 hour')
+ON CONFLICT (name) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS tg_channel (
+    handle      TEXT PRIMARY KEY,
+    outlet_id   INT REFERENCES state_outlet(id),
+    title       TEXT,
+    subscribers INT,
+    preview     BOOLEAN     NOT NULL,       -- false: t.me/s answered 302
+    checked_at  TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS tg_post (
+    handle         TEXT        NOT NULL REFERENCES tg_channel(handle),
+    post_id        BIGINT      NOT NULL,
+    posted_at      TIMESTAMPTZ NOT NULL,
+    text           TEXT,
+    views          INT,
+    forwarded_from TEXT,                    -- source channel handle, else its display name
+    links          TEXT[]      NOT NULL DEFAULT '{}',
+    media          TEXT[]      NOT NULL DEFAULT '{}',   -- kinds: photo, video, document, ...
+    first_seen     TIMESTAMPTZ NOT NULL,
+    last_seen      TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (handle, post_id)
+);
+CREATE INDEX IF NOT EXISTS tg_post_posted_at ON tg_post (posted_at);
+
+-- Links in posts that point at a registered outlet's site (R49).
+CREATE OR REPLACE VIEW state_telegram_link AS
+SELECT p.handle, p.post_id, p.posted_at, c.outlet_id AS channel_outlet_id, l.url,
+       i.value AS host, i.outlet_id AS linked_outlet_id, o.name AS linked_outlet, o.typology AS linked_typology
+FROM tg_post p
+JOIN tg_channel c ON c.handle = p.handle
+CROSS JOIN LATERAL unnest(p.links) AS l(url)
+CROSS JOIN LATERAL unnest(host_suffixes(substring(l.url from '^[A-Za-z]+://([^/:?#]+)'))) AS s(suffix)
+JOIN state_outlet_id i ON i.kind = 'host' AND i.value = s.suffix
+JOIN state_outlet o ON o.id = i.outlet_id;

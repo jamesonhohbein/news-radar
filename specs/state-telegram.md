@@ -1,6 +1,6 @@
 # State media on Telegram
 
-Status: proposed 2026-10-11. Extends `specs/state-media.md`; requirement and
+Status: landed 2026-10-11. Extends `specs/state-media.md`; requirement and
 test numbers continue after it.
 
 ## Why
@@ -60,7 +60,8 @@ in their own words, when they say it.
   preview BOOL, checked_at)` and `tg_post(handle, post_id, posted_at,
   text, views, forwarded_from, links TEXT[], media TEXT[], first_seen,
   last_seen, PRIMARY KEY (handle, post_id))`. Views parsed from `34.9K`
-  style counts into integers.
+  style counts into integers. `media` holds kinds (photo, video, ...), not
+  URLs: the preview's CDN URLs are signed and expire.
 - **R48 Unreachable channels.** A 302 sets `preview = false` and is
   retried once a day, not every run. `load_state_media.py --report` gains
   a third section: handles with no preview and handles with no post in 7
@@ -69,14 +70,15 @@ in their own words, when they say it.
   and joins their hosts to `state_outlet_id` through `host_suffixes()`, so
   a post linking to another state outlet's site shows both outlets.
 - **R50 Health and skill.** Each run writes one `fetch_log` row per
-  channel (R32). `.claude/skills/telegram/SKILL.md` per R34. README notes
+  channel per hour (file `<handle>/<YYYY-MM-DDTHH>`, upserted, so 15-minute
+  runs do not add 4,600 rows a day) (R32). A channel that errors is logged
+  and the rest still run. `.claude/skills/telegram/SKILL.md` per R34. README notes
   the content exception and its scope.
 
 ## Non-goals
 
 - No MTProto, no account, no YouTube or X.
-- No comments, reactions beyond views, or media downloads (media stays as
-  URLs).
+- No comments, reactions beyond views, or media downloads.
 - No translation, embedding or model call.
 
 ## Schema
