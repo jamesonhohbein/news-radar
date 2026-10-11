@@ -27,9 +27,15 @@ in their own words, when they say it.
   their preview is off or restricted: `rt_russian`, `rtnews`. Their posts
   are reachable only through the logged-in MTProto API, which needs a
   phone-number account.
-- Rates: TASS about 20 posts an hour (`tass_agency/399792` is a running
-  id); RIA, Press TV, IRNA and BelTA each fill a 20-post page in 2 to 6
-  hours.
+- Rates: RIA, Press TV, IRNA, TASS and BelTA each fill a 20-post page in
+  2 to 6 hours (`tass_agency/399792` is a running id).
+
+## Results 2026-10-11
+
+- 43 channels collected, 10 without a preview: all six RT channels,
+  `tasnimnews`, `rgrunew` and EITB's two. About 10,000 posts and 3.8 MB of
+  text for the 7-day backfill, which took about 25 minutes.
+- Last 24 h: IRNA 282 posts, Press TV 106, TASS 90, BelTA 73, RIA 51.
 
 ## Decisions in this spec (assumed, change before execute)
 

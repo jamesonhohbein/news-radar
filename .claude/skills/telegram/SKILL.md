@@ -23,8 +23,13 @@ media registry (skill `state-media-monitor`).
   `https://t.me/<handle>`**. Measured 2026-10-11: `rt_russian` and `rtnews`.
   Those need the logged-in MTProto API, which this collector does not use.
   `tg_channel.preview = false`, retried once a day.
-- Rates 2026-10-11: TASS about 20 posts an hour; RIA, Press TV, IRNA and
-  BelTA a 20-post page every 2 to 6 hours.
+- Posts in the 24 h to 2026-10-11 22:00 UTC: IRNA 282, Press TV 106,
+  TASS 90, BelTA 73, RIA 51. 43 channels with a preview, about 10,000
+  posts and 3.8 MB of text for the 7-day backfill. The first run takes
+  about 25 minutes; later runs are one page per channel.
+- Channels with no preview 2026-10-11: every RT channel (`rt_russian`,
+  `rtnews`, `rt_de`, `rtuknews`, `rtamerica`, `rtarabictelegram`),
+  `tasnimnews`, `rgrunew`, and EITB's two.
 
 ## Which channels
 
