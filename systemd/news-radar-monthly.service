@@ -1,5 +1,5 @@
 [Unit]
-Description=news-radar: monthly reference data (country codes, gazetteer, stoplist)
+Description=news-radar: monthly reference data (country codes, gazetteer, stoplist, state media)
 After=docker.service network-online.target
 
 [Service]
@@ -7,6 +7,7 @@ Type=oneshot
 WorkingDirectory=%h/dev/homelab/news-radar
 ExecStart=%h/dev/homelab/news-radar/.venv/bin/python scripts/load_country_codes.py
 ExecStart=%h/dev/homelab/news-radar/.venv/bin/python scripts/load_gazetteer.py
+ExecStart=%h/dev/homelab/news-radar/.venv/bin/python scripts/load_state_media.py
 # Common-word place names are measured from the stream itself (15 min).
 ExecStart=%h/dev/homelab/news-radar/.venv/bin/python bsky_stream.py --calibrate 900
 # The consumer builds its matcher at start; restart it onto the new gazetteer.

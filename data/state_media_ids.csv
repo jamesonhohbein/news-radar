@@ -1,0 +1,19 @@
+# Identifiers Wikidata misses (specs/state-media.md R41). country and name
+# must match state_outlet exactly; kind is host, telegram, youtube or x.
+# A row here wins over Wikidata and is never removed by a refresh.
+country,name,kind,value
+China,Xinhua (New China News Agency),host,news.cn
+China,Xinhua (New China News Agency),host,xinhuanet.com
+China,China Daily Group,host,chinadaily.com.cn
+China,China Media Group,host,cgtn.com
+China,China Media Group,host,cnr.cn
+China,China Media Group,host,cri.cn
+China,People's Daily,host,globaltimes.cn
+Russia,Rossiya Segodnya,host,ria.ru
+Russia,Rossiya Segodnya,host,sputnikglobe.com
+Russia,Rossiya Segodnya,host,sputniknews.com
+Russia,Rossiya Segodnya,host,inosmi.ru
+Russia,TASS,host,tass.com
+Iran,Islamic Republic of Iran Broadcasting (IRIB),host,presstv.ir
+Iran,Islamic Republic of Iran Broadcasting (IRIB),host,hispantv.com
+UAE,Emirates News Agency (WAM),host,wam.ae
