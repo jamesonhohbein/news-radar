@@ -20,6 +20,9 @@ def print_report(conn) -> None:
     print(f"\n# Hosts with no GKG article in 7 days ({len(r['silent_host'])})")
     for t, c, n, h in r["silent_host"]:
         print(f"{t}\t{c}\t{n}\t{h}")
+    print(f"\n# Telegram channels with no preview or no post in 7 days ({len(r['telegram'])})")
+    for t, c, n, h, why in r["telegram"]:
+        print(f"{why}\t{t}\t{c}\t{n}\t{h}")
 
 
 def main() -> None:

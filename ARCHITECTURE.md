@@ -1,7 +1,8 @@
 # Architecture
 
-Updated to `specs/state-media.md` After. Earlier specs predate the diagram
-policy; the adapters box stands for every source under `newsradar/`.
+Updated to `specs/state-telegram.md` After. Earlier specs predate the
+diagram policy; the adapters box stands for every source under
+`newsradar/`.
 
 ```mermaid
 flowchart LR
@@ -15,7 +16,16 @@ flowchart LR
   GKG --> SMA[[state_media_article view<br/>host_suffixes join]]
   SOI --> SMA
   SO --> SMA
+  TG[t.me/s web preview] --> Coll[telegram adapter, ingest every 15 min]
+  SOI --> Coll
+  Coll --> TC[(tg_channel)]
+  Coll --> TP[(tg_post)]
+  Coll --> FL[(fetch_log)]
+  TP --> STL[[state_telegram_link]]
+  SOI --> STL
   GKG --> Lens[lens and detector queries]
   Events --> Lens
   SMA --> Lens
+  TP --> Lens
+  STL --> Lens
 ```
