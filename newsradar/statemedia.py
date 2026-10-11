@@ -333,4 +333,12 @@ def report(conn) -> dict[str, list[tuple]]:
           AND (c.preview IS FALSE OR NOT EXISTS (
               SELECT 1 FROM tg_post p WHERE p.handle = i.value AND p.posted_at > now() - interval '7 days'))
         ORDER BY 5, 1, 2, 3, 4""").fetchall()
-    return {"no_host": no_host, "silent_host": silent, "telegram": telegram}
+    # Collected YouTube channels (adapters/youtube.py R51) gone or silent (R54).
+    youtube = conn.execute("""
+        SELECT o.typology, o.country, o.name, c.channel_id,
+               CASE WHEN c.status = 'gone' THEN 'gone: ' || left(c.reason, 60) ELSE 'no upload in 7 days' END
+        FROM yt_channel c JOIN state_outlet o ON o.id = c.outlet_id
+        WHERE c.status = 'gone' OR NOT EXISTS (
+            SELECT 1 FROM yt_video v WHERE v.channel_id = c.channel_id AND v.published_at > now() - interval '7 days')
+        ORDER BY 5, 1, 2, 3, 4""").fetchall()
+    return {"no_host": no_host, "silent_host": silent, "telegram": telegram, "youtube": youtube}

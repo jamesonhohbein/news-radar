@@ -683,3 +683,46 @@ CROSS JOIN LATERAL unnest(p.links) AS l(url)
 CROSS JOIN LATERAL unnest(host_suffixes(substring(l.url from '^[A-Za-z]+://([^/:?#]+)'))) AS s(suffix)
 JOIN state_outlet_id i ON i.kind = 'host' AND i.value = s.suffix
 JOIN state_outlet o ON o.id = i.outlet_id;
+
+-- State media YouTube channels through Invidious (specs/state-youtube.md).
+-- Titles and descriptions of registry channels' uploads only (R53).
+INSERT INTO source (kind, name, attention, expect_every) VALUES ('youtube', 'youtube-state', false, '2 hours')
+ON CONFLICT (name) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS yt_channel (
+    channel_id  TEXT PRIMARY KEY,
+    outlet_id   INT REFERENCES state_outlet(id),
+    title       TEXT,
+    subscribers INT,
+    status      TEXT        NOT NULL CHECK (status IN ('live', 'gone')),
+    reason      TEXT,                       -- Invidious' message for a gone channel
+    checked_at  TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS yt_video (
+    video_id     TEXT PRIMARY KEY,
+    channel_id   TEXT        NOT NULL REFERENCES yt_channel(channel_id),
+    published_at TIMESTAMPTZ NOT NULL,      -- from the list's relative time at first sight
+    title        TEXT        NOT NULL,
+    description  TEXT,
+    keywords     TEXT[]      NOT NULL DEFAULT '{}',
+    length_s     INT,
+    views        BIGINT,
+    live         BOOLEAN     NOT NULL DEFAULT false,
+    first_seen   TIMESTAMPTZ NOT NULL,
+    last_seen    TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS yt_video_published_at ON yt_video (published_at);
+CREATE INDEX IF NOT EXISTS yt_video_channel ON yt_video (channel_id, published_at);
+
+-- Links in descriptions that point at a registered outlet's site (R55).
+CREATE OR REPLACE VIEW state_youtube_link AS
+SELECT v.video_id, v.channel_id, v.published_at, c.outlet_id AS channel_outlet_id, u.url,
+       i.value AS host, i.outlet_id AS linked_outlet_id, o.name AS linked_outlet, o.typology AS linked_typology
+FROM yt_video v
+JOIN yt_channel c ON c.channel_id = v.channel_id
+CROSS JOIN LATERAL regexp_matches(coalesce(v.description, ''), '(https?://[^\s<>"'')]+)', 'g') AS l(m)
+CROSS JOIN LATERAL (SELECT l.m[1] AS url) u
+CROSS JOIN LATERAL unnest(host_suffixes(substring(u.url from '^[A-Za-z]+://([^/:?#]+)'))) AS s(suffix)
+JOIN state_outlet_id i ON i.kind = 'host' AND i.value = s.suffix
+JOIN state_outlet o ON o.id = i.outlet_id;
