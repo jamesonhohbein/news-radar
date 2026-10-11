@@ -45,7 +45,9 @@ the lens, not a filter at load.
   trajectory, assets, smm_url, first_seen, last_seen). A DATA row wins over
   a profile row for the same outlet, meaning the same country and a shared
   normalised name variant (full name, the part before a parenthesis, or the
-  acronym inside it). A subnational profile (`Spain · Catalonia`) stores
+  acronym inside it), or a pair named in `SMM_ALIASES` (`China Daily` is
+  `China Daily Group`); a row stored under an alias before it was named is
+  removed. A subnational profile (`Spain · Catalonia`) stores
   the second part as `region`. An outlet that disappears
   from SMM keeps its row with a stale `last_seen`; nothing is deleted.
   Refreshed by `news-radar-monthly.timer`.
@@ -114,7 +116,7 @@ CREATE TABLE state_outlet_id (
 | ID | Req | Test |
 |---|---|---|
 | T36 | R39 | A fixture regional page yields outlets with typology and trajectory, a null year stored as `-`; a fixture profile page yields its Quick Facts code; a profile row for an outlet already in DATA is ignored |
-| T37 | R39 | Loading the same fixtures twice inserts nothing; an outlet absent from the second load keeps its row and its old `last_seen` |
+| T37 | R39 | Loading the same fixtures twice inserts nothing; an outlet absent from the second load keeps its row and its old `last_seen`; a profile under an `SMM_ALIASES` name merges into its DATA outlet and a stale row under that name is removed |
 | T38 | R40 | A fixture Wikidata response stores host, telegram and youtube rows with the qid, `www.` stripped; a search with two in-country candidates stores nothing and the outlet appears unmatched |
 | T39 | R41 | A manual row survives a refresh whose Wikidata answer differs |
 | T40 | R42 | `english.news.cn` matches `news.cn`; `fakenews.cn` and `news.cn.example.org` do not |
