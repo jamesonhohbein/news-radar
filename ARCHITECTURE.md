@@ -1,6 +1,6 @@
 # Architecture
 
-Updated to `specs/state-telegram.md` After. Earlier specs predate the
+Updated to `specs/state-youtube.md` After. Earlier specs predate the
 diagram policy; the adapters box stands for every source under
 `newsradar/`.
 
@@ -23,9 +23,18 @@ flowchart LR
   Coll --> FL[(fetch_log)]
   TP --> STL[[state_telegram_link]]
   SOI --> STL
+  INV[Invidious API] --> YColl[youtube adapter, each channel hourly]
+  SOI --> YColl
+  YColl --> YC[(yt_channel)]
+  YColl --> YV[(yt_video)]
+  YColl --> FL
+  YV --> SYL[[state_youtube_link]]
+  SOI --> SYL
   GKG --> Lens[lens and detector queries]
   Events --> Lens
   SMA --> Lens
   TP --> Lens
   STL --> Lens
+  YV --> Lens
+  SYL --> Lens
 ```

@@ -1,6 +1,6 @@
 # State media on YouTube
 
-Status: proposed 2026-10-11. Extends `specs/state-media.md` and
+Status: landed 2026-10-11. Extends `specs/state-media.md` and
 `specs/state-telegram.md`; requirement and test numbers continue after them.
 Homelab #310.
 
@@ -28,16 +28,20 @@ outlets put on YouTube with what they put on their sites and Telegram.
   CaPu 3, CaPr 2.
 - The list call returns the 60 most recent uploads with title, video id,
   approximate publish time ("16 hours ago" resolved to a timestamp), views
-  and length. Description is empty there; `/api/v1/videos/<id>` has it,
-  along with an exact publish time and keywords.
+  and length. Description is empty there; `/api/v1/videos/<id>` has it
+  and keywords, but its publish time is the date at midnight.
 - 69 channels uploaded in the last 7 days, about 1,200 videos a day in
   total. The busiest (Yonhap at 111 a day) fills 60 entries in 13 hours.
 
-## Decisions in this spec (assumed, change before execute)
+## Results 2026-10-11
+
+Filled in after the first live run.
+
+## Decisions in this spec (approved 2026-10-11)
 
 - **Invidious, not the feed and not the Data API.** No key and no quota,
-  and the instance already runs here. Core reads `INVIDIOUS_URL` from the
-  environment, so nothing host-specific lands in the open-source code;
+  and the instance already runs here. Core reads `NEWSRADAR_INVIDIOUS_URL` from
+  `.env` or the environment (`db.load_env`), so nothing host-specific lands in the open-source code;
   anyone can point it at their own instance. Without it the collector logs
   once and does nothing.
 - **Hourly per channel.** 60 entries cover at least 13 hours for the
@@ -65,9 +69,10 @@ outlets put on YouTube with what they put on their sites and Telegram.
   User-Agent.
 - **R53 Storage.** `yt_channel` and `yt_video` per the schema below. A
   video seen again updates `views`, `title` and `last_seen`, keeps
-  `first_seen` and `published_at`. `published_at` comes from the detail
-  call; the list's approximate time is used only if the detail fails, and
-  `published_exact` says which.
+  `first_seen` and `published_at`. `published_at` is the list's time at
+  first sight ("12 minutes ago" resolved), precise for a new upload; the
+  detail's is date-only. A failed detail stores the list's title and no
+  description.
 - **R54 Gone channels.** An Invidious error naming termination, removal,
   unavailability or non-existence sets `status` to `gone` with the message
   in `reason`; a gone channel is retried once a week. Any other error
@@ -81,9 +86,11 @@ outlets put on YouTube with what they put on their sites and Telegram.
   hour (file `<channel_id>/<YYYY-MM-DDTHH>`, upserted). An HTTP 429 or 403
   from Invidious ends the run and records it in `fetch_log`; the next run
   starts over. A channel that errors otherwise is logged and the rest still
-  run. `.claude/skills/youtube/SKILL.md` per R34 names `INVIDIOUS_URL` and
+  run. `.claude/skills/youtube/SKILL.md` per R34 names `NEWSRADAR_INVIDIOUS_URL` and
   the two endpoints. The README's content-exception note covers YouTube.
-  `.env` on this host sets `INVIDIOUS_URL=http://127.0.0.1:3088`.
+  On this host a user drop-in,
+  `news-radar-ingest.service.d/invidious.conf`, sets
+  `NEWSRADAR_INVIDIOUS_URL=http://127.0.0.1:3088`.
 
 ## Non-goals
 
@@ -108,7 +115,6 @@ CREATE TABLE yt_video (
     video_id        TEXT PRIMARY KEY,
     channel_id      TEXT        NOT NULL REFERENCES yt_channel(channel_id),
     published_at    TIMESTAMPTZ NOT NULL,
-    published_exact BOOLEAN     NOT NULL,
     title           TEXT        NOT NULL,
     description     TEXT,
     keywords        TEXT[]      NOT NULL DEFAULT '{}',
@@ -127,12 +133,12 @@ CREATE INDEX ON yt_video (channel_id, published_at);
 | ID | Req | Test |
 |---|---|---|
 | T50 | R51 | A non-`UC` value is excluded; a manual youtube row is included |
-| T51 | R52, R53 | A fixture list and detail yield a video with exact time, description, keywords, length and integer views; a failed detail stores the list time with `published_exact = false` |
+| T51 | R52, R53 | A fixture list and detail yield a video with the list's time, the detail's title, description, keywords, length and integer views; a failed detail stores the list's title and time with no description |
 | T52 | R52 | A channel checked 30 minutes ago is skipped; only unseen video ids get a detail call (a fake fetch counts requests) |
 | T53 | R53 | A video seen again updates views and title, keeps `first_seen` and `published_at` |
 | T54 | R54 | A termination error marks the channel `gone` with its reason and skips it until a week has passed; the report lists it |
 | T55 | R55 | A description linking `english.news.cn/x` joins to the outlet owning `news.cn`; `fakenews.cn` does not |
-| T56 | R56 | A 429 stops the run after that request and writes a `fetch_log` row; unset `INVIDIOUS_URL` makes no request; the skill exists and names `/api/v1/channels/` |
+| T56 | R56 | A 429 stops the run after that request and writes a `fetch_log` row; unset `NEWSRADAR_INVIDIOUS_URL` makes no request; the skill exists and names `/api/v1/channels/` |
 
 ## Architecture
 
@@ -181,7 +187,7 @@ flowchart LR
   Coll --> FL[(fetch_log)]
   TP --> STL[[state_telegram_link]]
   SOI --> STL
-  INV[Invidious API, INVIDIOUS_URL] --> YColl[youtube adapter, each channel hourly]
+  INV[Invidious API, NEWSRADAR_INVIDIOUS_URL] --> YColl[youtube adapter, each channel hourly]
   SOI --> YColl
   YColl --> YC[(yt_channel)]
   YColl --> YV[(yt_video)]

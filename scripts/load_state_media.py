@@ -23,6 +23,9 @@ def print_report(conn) -> None:
     print(f"\n# Telegram channels with no preview or no post in 7 days ({len(r['telegram'])})")
     for t, c, n, h, why in r["telegram"]:
         print(f"{why}\t{t}\t{c}\t{n}\t{h}")
+    print(f"\n# YouTube channels gone or with no upload in 7 days ({len(r['youtube'])})")
+    for t, c, n, ch, why in r["youtube"]:
+        print(f"{why}\t{t}\t{c}\t{n}\t{ch}")
 
 
 def main() -> None:

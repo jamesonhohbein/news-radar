@@ -13,3 +13,7 @@ ExecStart=-%h/dev/homelab/news-radar/.venv/bin/python headlines.py
 ExecStart=-%h/dev/homelab/news-radar/.venv/bin/python ingest.py primary
 # State media Telegram channels (specs/state-telegram.md), about a minute.
 ExecStart=-%h/dev/homelab/news-radar/.venv/bin/python scripts/collect_telegram.py
+# State media YouTube channels via Invidious (specs/state-youtube.md);
+# each channel at most hourly. NEWSRADAR_INVIDIOUS_URL comes from .env or a
+# drop-in; unset, this does nothing.
+ExecStart=-%h/dev/homelab/news-radar/.venv/bin/python scripts/collect_youtube.py
