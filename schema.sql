@@ -599,3 +599,47 @@ CREATE TABLE IF NOT EXISTS conflict_forecast (
     p_any      REAL,               -- main_dich: probability of any (25+) deaths
     PRIMARY KEY (run, country, month)
 );
+
+-- State media registry (specs/state-media.md R39 to R42). Outlets and their
+-- State Media Monitor typology, every typology kept; the lens filters on it.
+CREATE TABLE IF NOT EXISTS state_outlet (
+    id         SERIAL PRIMARY KEY,
+    country    TEXT   NOT NULL,
+    name       TEXT   NOT NULL,
+    region     TEXT,
+    typology   TEXT   NOT NULL,        -- SC, CaPu, CaPr, ISF, ISM, ISFM, IP
+    trajectory TEXT[] NOT NULL,        -- 2022..2026, '-' where unrated
+    assets     TEXT,
+    smm_url    TEXT   NOT NULL,
+    first_seen DATE   NOT NULL,
+    last_seen  DATE   NOT NULL,        -- stale = gone from SMM; never deleted
+    UNIQUE (country, name)
+);
+
+CREATE TABLE IF NOT EXISTS state_outlet_id (
+    outlet_id INT  NOT NULL REFERENCES state_outlet(id),
+    kind      TEXT NOT NULL,           -- host, telegram, youtube, x
+    value     TEXT NOT NULL,           -- hosts lowercased, no www.
+    origin    TEXT NOT NULL,           -- wikidata, manual
+    qid       TEXT,
+    PRIMARY KEY (kind, value)
+);
+
+-- A hostname and every parent domain of it, on label boundaries:
+-- english.news.cn -> {english.news.cn, news.cn, cn}. Joining on these is an
+-- equi-join, so matching 700k articles a week against the registry hashes.
+CREATE OR REPLACE FUNCTION host_suffixes(h TEXT) RETURNS TEXT[]
+LANGUAGE sql IMMUTABLE STRICT AS $$
+    SELECT array_agg(array_to_string(p[i:], '.') ORDER BY i)
+    FROM (SELECT string_to_array(lower(h), '.') AS p) s,
+         generate_series(1, array_length(string_to_array(h, '.'), 1)) i
+$$;
+
+-- GKG articles published by a registered outlet (R42).
+CREATE OR REPLACE VIEW state_media_article AS
+SELECT a.id AS article_id, a.added_at, a.url, a.site, a.tone, a.themes,
+       i.value AS host, o.id AS outlet_id, o.country AS outlet_country, o.name AS outlet, o.typology
+FROM gkg_article a
+CROSS JOIN LATERAL unnest(host_suffixes(a.site)) AS s(suffix)
+JOIN state_outlet_id i ON i.kind = 'host' AND i.value = s.suffix
+JOIN state_outlet o ON o.id = i.outlet_id;

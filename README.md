@@ -58,6 +58,7 @@ positron, no key). `/api/anomaly`, `/api/events/top` and
 | `attention_hourly`, `attention_daily` | Events, mentions and sources per country and per ADM1. Hourly kept 90 days, daily forever |
 | `attention_anomaly` | Each of the last 48 hours against the same hour of day over the trailing 30 days: mean, sd, z. Materialized hourly by `rollup.py` |
 | `conflict_forecast` | VIEWS predicted state-based fatalities per country and month, 36 months ahead, one set per monthly run, kept forever. Not events |
+| `state_outlet`, `state_outlet_id` | Government-run and public media outlets with their State Media Monitor typology (SC state-controlled, CaPu/CaPr captured, ISF/ISM/ISFM/IP independent public), and their hostnames, Telegram, YouTube and X handles from Wikidata and `data/state_media_ids.csv`. `state_media_article` is GKG articles joined to their outlet. Loaded monthly by `scripts/load_state_media.py`; `--report` lists coverage gaps |
 | `fetch_log` | Every file loaded, with rows seen and kept. A gap here is a gap in the series |
 | `story` | Headline and site per story URL, fetched from the page after each ingest for URLs at 2+ first-window sources; failures retry 3 times, 6 h apart |
 | `source`, `alert`, `watch` | Adapter registry (`attention` says whether a source's events count as coverage); what the detector has sent (later phase); reserved |
@@ -112,3 +113,6 @@ UCDP candidate events are CC BY 4.0 (Uppsala Conflict Data Program).
 VIEWS forecasts (Uppsala and PRIO) are free through their API with no
 stated data licence; its model code is CC BY-NC 4.0, so treat the
 forecasts as non-commercial and credit VIEWS.
+The state media registry is State Media Monitor (Media and Journalism
+Research Center, CC BY 4.0, doi:10.5281/zenodo.17219015) with identifiers
+from Wikidata (CC0).

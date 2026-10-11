@@ -3,6 +3,7 @@
 __pycache__/
 *.pyc
 docker-compose.override.yml
-data/
+data/*
+!data/state_media_ids.csv
 web/test-results/
 backups/
