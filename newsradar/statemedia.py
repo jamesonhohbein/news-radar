@@ -33,6 +33,9 @@ PROPS = {"P856": "host", "P3789": "telegram", "P2397": "youtube", "P2002": "x"}
 
 Fetch = Callable[[str], bytes]
 
+# SMM profile titles that name a DATA outlet with no shared name variant.
+SMM_ALIASES = {("China", "China Daily"): "China Daily Group", ("Russia", "Channel One"): "Channel One Russia"}
+
 # SMM country names that differ from GeoNames' (country_code.name).
 SMM_ISO2 = {"netherlands": "NL", "palestinian territories": "PS", "the maldives": "MV", "uae": "AE"}
 
@@ -116,6 +119,7 @@ def outlets_from_posts(posts: Iterable[dict]) -> list[Outlet]:
             profiles.append(o)
     out, seen = [], {}
     for o in data + profiles:
+        o.name = SMM_ALIASES.get((o.country, o.name), o.name)
         keys = seen.setdefault(o.country, set())
         k = name_keys(o.name)
         if k & keys:
@@ -137,7 +141,11 @@ def fetch_posts(fetch: Fetch = http_get) -> list[dict]:
 
 def upsert_outlets(conn, outlets: list[Outlet], today: date) -> int:
     """Insert new outlets, refresh seen ones; an outlet gone from SMM keeps its
-    row and its old last_seen. Returns how many rows were new."""
+    row and its old last_seen. Returns how many rows were new. A row stored
+    under an SMM_ALIASES name before the alias existed is removed."""
+    for country, name in SMM_ALIASES:
+        conn.execute("DELETE FROM state_outlet o WHERE country = %s AND name = %s AND NOT EXISTS ("
+                     "SELECT 1 FROM state_outlet_id i WHERE i.outlet_id = o.id)", (country, name))
     new = 0
     for o in outlets:
         r = conn.execute("""

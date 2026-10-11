@@ -110,6 +110,18 @@ class T37Upsert(StateDB):
         self.assertEqual(rows["Corporacion de Radio y Television Espanola (RTVE)"], date(2026, 10, 1))
         self.assertEqual(rows["RT"], date(2026, 11, 1))
 
+    def test_alias_profile_merges_and_stale_alias_row_goes(self):
+        self.conn.execute("""INSERT INTO state_outlet (country, name, typology, trajectory, smm_url, first_seen, last_seen)
+                             VALUES ('Russia', 'Channel One', 'CaPu', '{CaPu}', 'u', '2026-09-01', '2026-09-01')""")
+        sm.SMM_ALIASES[("Russia", "Rossiya")] = "RT"
+        try:
+            self.load(REGIONAL + [_profile_as("Russia", "Rossiya")])
+        finally:
+            del sm.SMM_ALIASES[("Russia", "Rossiya")]
+        names = {r[0] for r in self.conn.execute("SELECT name FROM state_outlet WHERE country = 'Russia'")}
+        self.assertNotIn("Rossiya", names)
+        self.assertNotIn("Channel One", names)
+
 
 class T38Wikidata(StateDB):
     def test_single_in_country_item_and_ambiguity(self):
