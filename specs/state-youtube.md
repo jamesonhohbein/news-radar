@@ -35,7 +35,14 @@ outlets put on YouTube with what they put on their sites and Telegram.
 
 ## Results 2026-10-11
 
-Filled in after the first live run.
+- First backfill: 84 channels live, 12 gone (every RT channel, Tsargrad,
+  BelTA, Phoenix TV, three Gazprom Media, OTR, Phnom Penh Post, BRTK).
+  4,789 videos, 4,463 with descriptions, 7 MB. It took about 3 hours at one
+  request a second and ran by hand, outside the ingest unit.
+- 17 live channels had no upload in 7 days (People's Daily, VRT, Sveriges
+  Radio, MBC, several Gazprom Media).
+- Invidious sometimes answers 200 with a non-JSON body (TVB, twice); since
+  PR #27 that costs one description, not the channel.
 
 ## Decisions in this spec (approved 2026-10-11)
 
