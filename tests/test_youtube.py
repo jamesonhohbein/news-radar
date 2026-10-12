@@ -2,6 +2,7 @@
 parsing, due checks, refresh, gone channels, the link lens, back-off,
 configuration and the skill."""
 import unittest
+import unittest.mock
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -84,6 +85,17 @@ class T51Parse(YTDB):
         self.assertEqual(rows["fiwzv2"], (NOW - timedelta(hours=2), "title 2", None, [], 211, 100))
         ch = self.one("SELECT title, subscribers, status FROM yt_channel")
         self.assertEqual(ch, ("AlJazeera Arabic", 23700000, "live"))
+
+
+class T51NonJson(unittest.TestCase):
+    def test_non_json_200_is_empty(self):
+        class Resp:
+            status = 200
+            def read(self): return b"<html>busy</html>"
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+        with unittest.mock.patch("urllib.request.urlopen", return_value=Resp()):
+            self.assertEqual(yt.http_fetch("http://inv/api/v1/videos/x"), (200, {}))
 
 
 class T52Due(YTDB):

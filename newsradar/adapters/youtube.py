@@ -38,12 +38,15 @@ def http_fetch(url: str) -> tuple[int, dict]:
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
-            return r.status, json.loads(r.read())
+            status, raw = r.status, r.read()
     except urllib.error.HTTPError as e:
-        try:
-            return e.code, json.loads(e.read() or b"{}")
-        except ValueError:
-            return e.code, {}
+        status, raw = e.code, e.read()
+    # Invidious sometimes answers 200 with a non-JSON body; treat it as empty
+    # so a detail failure costs one description, not the channel.
+    try:
+        return status, json.loads(raw or b"{}")
+    except ValueError:
+        return status, {}
 
 
 def base_url() -> str | None:
