@@ -1,0 +1,11 @@
+# Copy to ~/.config/systemd/user/news-radar-rollup.service.d/archive.conf,
+# set the path, then `systemctl --user daemon-reload` (specs/archive.md).
+# Without NEWSRADAR_ARCHIVE_DIR, rollup.py prunes only the scratch buffers and
+# leaves every archived table alone (R62).
+#
+# Put the archive on bulk storage and give it a backup root: it is the only
+# copy of everything older than the hot windows. Scratch defaults to $TMPDIR;
+# point NEWSRADAR_ARCHIVE_SCRATCH at fast local disk if $TMPDIR is small.
+[Service]
+Environment=NEWSRADAR_ARCHIVE_DIR=/path/to/news-radar-archive
+#Environment=NEWSRADAR_ARCHIVE_SCRATCH=/var/tmp

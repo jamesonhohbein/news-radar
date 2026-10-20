@@ -74,7 +74,9 @@ spec, not this one.
   `V2Locations` (every place in the article, not one action geo). Raw
   retention 30 days. Rolled into `theme_daily(region_kind, region, theme,
   day, articles)`, kept forever, and `theme_hourly` at country level, kept
-  90 days. Location type 1 (country-only centroids) counts toward country
+  90 days. (Amended by `specs/archive.md`, 2026-10-19: `theme_daily` keeps
+  180 days in Postgres and forever in the Parquet archive; `theme_hourly`
+  keeps 7 days, then the archive.) Location type 1 (country-only centroids) counts toward country
   but never ADM1.
 - **R23 Retention is measured before it is final.** Phase 1 ends by
   reporting the real per-day size of `gkg_article`, `gkg_location`,
@@ -213,10 +215,10 @@ GVP (weekly), MODIS.
 ```
 mention_hourly    event_id, hour, mentions, sources   PK (event_id, hour)
 event_growth      view: 1 h and 6 h mentions/sources vs first window
-gkg_article       id, added_at, url, site, tone, themes text[]     30 d
-gkg_location      article_id, geom, country, adm1, loc_type         30 d
-theme_daily       region_kind, region, theme, day, articles         forever
-theme_hourly      region, theme, hour, articles (country)           90 d
+gkg_article       id, added_at, url, site, tone, themes text[]     30 d + archive
+gkg_location      article_id, geom, country, adm1, loc_type         30 d + archive
+theme_daily       region_kind, region, theme, day, articles         180 d + archive
+theme_hourly      region, theme, hour, articles (country)           7 d + archive
 nws_zone          code, kind, geom
 firms_detection   satellite, lat, lon, acq_date, acq_time, frp, confidence  30 d
 wiki_page         wiki, title, geom, country, adm1, checked_at

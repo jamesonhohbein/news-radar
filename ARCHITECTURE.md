@@ -1,8 +1,8 @@
 # Architecture
 
-Updated to `specs/state-youtube.md` After. Earlier specs predate the
-diagram policy; the adapters box stands for every source under
-`newsradar/`.
+Updated to `specs/archive.md` After (on top of `specs/state-youtube.md`).
+Earlier specs predate the diagram policy; the adapters box stands for every
+source under `newsradar/`.
 
 ```mermaid
 flowchart LR
@@ -37,4 +37,12 @@ flowchart LR
   STL --> Lens
   YV --> Lens
   SYL --> Lens
+  Rollup[rollup.py hourly] --> Events
+  Rollup --> GKG
+  Rollup -- export day slice --> Scratch[scratch Parquet on NVMe]
+  Scratch -- verify count, move --> Arch[(Parquet archive<br/>NEWSRADAR_ARCHIVE_DIR on hdd)]
+  Arch -- count matches --> Del[DELETE slice from Postgres]
+  Arch --> Duck[archive.py query, DuckDB views] --> Lens
+  Events --> Dump[nightly pg_dump] --> Borg[borg]
+  Arch -- .backup-tier root --> Borg
 ```

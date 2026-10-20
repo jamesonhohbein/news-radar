@@ -57,18 +57,40 @@ The web app and agent use the read-only `reader` role (10 s timeout).
 
 | Table | Holds | Kept |
 |---|---|---|
-| `event` (source `gdelt-events`) | one row per geolocated event | 90 d |
+| `event` (source `gdelt-events`) | one row per geolocated event | 60 d, then archive |
 | `mention` (source `gdelt-mentions`) | raw (event, time, outlet), mentions of events we hold | 72 h |
-| `mention_hourly` | mentions and distinct outlets per event per hour | 90 d |
+| `mention_hourly` | mentions and distinct outlets per event per hour | 7 d, then archive |
 | `event_growth` | view: mentions and outlets in the last 1 h and 6 h per event | |
-| `gkg_article` (source `gdelt-gkg`) | per article: URL, site, tone, V1 themes | 30 d |
-| `gkg_location` | every place an article names; type 1 is a country centroid and has no ADM1 | 30 d |
-| `theme_daily` | articles per theme per country or ADM1 per day | forever |
-| `theme_hourly` | articles per theme per country per hour | 90 d |
+| `gkg_article` (source `gdelt-gkg`) | per article: URL, site, tone, V1 themes | 30 d, then archive |
+| `gkg_location` | every place an article names; type 1 is a country centroid and has no ADM1 | 30 d, then archive |
+| `theme_daily` | articles per theme per country or ADM1 per day | 180 d, then archive |
+| `theme_hourly` | articles per theme per country per hour | 7 d, then archive |
 | `story` | headline and site per URL with 2+ first-window sources | |
-| `attention_hourly` / `attention_daily` | events (first sightings), mentions and outlets (coverage that hour) per country or ADM1 | 90 d / forever |
+| `attention_hourly` / `attention_daily` | events (first sightings), mentions and outlets (coverage that hour) per country or ADM1 | 35 d, then archive / forever |
 | `attention_anomaly` | hourly z-score vs same hour over 30 d, last 48 h | |
 | `fetch_log` | one row per loaded file | |
+
+"Then archive" means `rollup.py` writes the rows to Parquet before deleting
+them, whole UTC days only, so nothing past the window is lost; it moves to
+the archive below (`specs/archive.md`). GDACS and volcano events are never
+pruned: their feeds keep serving old items.
+
+### Querying the archive
+
+`./archive.py query "<sql>"` from the repo runs DuckDB over
+`$NEWSRADAR_ARCHIVE_DIR` (on hog `/mnt/hdd/home/jameson/news-radar-archive`;
+the systemd drop-in sets it, so pass `--dir` from a shell). Every archived
+table is a view with its Postgres name, so a query runs unchanged except:
+`geom` is `lon`/`lat` (`geom_lon`/`geom_lat` on `firms_detection`), jsonb is
+JSON text, `themes` is a list. Output is TSV. Only rows older than the hot
+window are there; union with Postgres yourself for a span that crosses it.
+A table with no files yet has no view.
+
+```bash
+./archive.py query --dir /mnt/hdd/home/jameson/news-radar-archive \
+  "SELECT theme, sum(articles) a FROM theme_daily WHERE region = 'UP'
+   AND day < DATE '2026-06-01' GROUP BY 1 ORDER BY a DESC LIMIT 15"
+```
 
 ```sql
 -- Is it fresh? Newest file and when it loaded (expect under 20 min old).

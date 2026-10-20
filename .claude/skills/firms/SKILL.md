@@ -45,9 +45,9 @@ running totals in `fire` and mirrored into `props`.
 
 | Table | Holds | Kept |
 |---|---|---|
-| `firms_detection` | every pixel, with `fire_id` = the fire's `event.id` | 30 d |
+| `firms_detection` | every pixel, with `fire_id` = the fire's `event.id` | 30 d, then archive (`archive.py query`) |
 | `fire` | per fire: convex hull, detections, high-confidence count, FRP sum and max, first and last seen | |
-| `event` (source `firms-fires`) | the fire; point on its hull, `props` mirror `fire` plus `area_km2` | 90 d |
+| `event` (source `firms-fires`) | the fire; point on its hull, `props` mirror `fire` plus `area_km2` | 60 d, then archive |
 
 ```sql
 -- Largest fires still burning.

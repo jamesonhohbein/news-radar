@@ -55,7 +55,7 @@ positron, no key). `/api/anomaly`, `/api/events/top` and
 |---|---|
 | `event` | One row per geolocated event. GDELT's vocabulary: CAMEO code, QuadClass, Goldstein, tone, actors, action geo, and the mention/source/article counts from the 15-minute window it first appeared in. Primary-feed events use the same row with `props` for what GDELT has no column for (magnitude, alert level) |
 | `country_shape` | Natural Earth 110m polygons by FIPS code, for reverse geocoding sources that give a point but no country. Loaded by `scripts/load_countries.py` |
-| `attention_hourly`, `attention_daily` | Events, mentions and sources per country and per ADM1. Hourly kept 90 days, daily forever |
+| `attention_hourly`, `attention_daily` | Events, mentions and sources per country and per ADM1. Hourly kept 35 days in Postgres, then in the Parquet archive (`specs/archive.md`); daily forever |
 | `attention_anomaly` | Each of the last 48 hours against the same hour of day over the trailing 30 days: mean, sd, z. Materialized hourly by `rollup.py` |
 | `conflict_forecast` | VIEWS predicted state-based fatalities per country and month, 36 months ahead, one set per monthly run, kept forever. Not events |
 | `state_outlet`, `state_outlet_id` | Government-run and public media outlets with their State Media Monitor typology (SC state-controlled, CaPu/CaPr captured, ISF/ISM/ISFM/IP independent public), and their hostnames, Telegram, YouTube and X handles from Wikidata and `data/state_media_ids.csv`. `state_media_article` is GKG articles joined to their outlet. Loaded monthly by `scripts/load_state_media.py`; `--report` lists coverage gaps |

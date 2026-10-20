@@ -321,6 +321,10 @@ CREATE TABLE IF NOT EXISTS theme_daily (
     articles    INT  NOT NULL,
     PRIMARY KEY (region_kind, region, theme, day)
 );
+-- The archive pass (specs/archive.md) asks min(day) below the cutoff every
+-- hour; without this that is a scan of the whole table. Rows arrive in day
+-- order, so a BRIN index answers it and costs almost nothing on disk.
+CREATE INDEX IF NOT EXISTS theme_daily_day_brin ON theme_daily USING brin (day);
 
 CREATE TABLE IF NOT EXISTS theme_hourly (
     region   TEXT        NOT NULL,   -- country only

@@ -7,7 +7,7 @@ coverage in that hour (from the raw mention buffer, R19), so a story that
 keeps running keeps its region lit. They are only recomputed for hours the
 buffer still covers; older rows keep what was computed while it did.
 
-    rollup.py            # last 48 h of hourly and daily, anomaly for last 48 h, prune
+    rollup.py            # last 48 h of hourly and daily, anomaly for last 48 h, archive + prune
     rollup.py --full     # every hour in the table (after a backfill)
 
 Rollups upsert, so re-running a window is safe. Anomaly compares each hour to
@@ -17,16 +17,31 @@ Poisson floor on the standard deviation; see schema.sql.
 from __future__ import annotations
 
 import argparse
+import sys
 from datetime import datetime, timedelta, timezone
 
-from newsradar.db import connect
+from newsradar import archive
+from newsradar.db import connect, load_env
 
-RETAIN_EVENT_DAYS = 90
-RETAIN_HOURLY_DAYS = 90
+# Hot windows (specs/archive.md, Decision 5). Every table here is archived to
+# Parquet under NEWSRADAR_ARCHIVE_DIR before its rows are deleted; the window
+# is only how long a row stays in Postgres.
+ARCHIVE_WINDOWS = {
+    "event": 60,              # primary_live's UCDP 60-day event-date clause
+    "theme_hourly": 7,        # nothing reads it
+    "mention_hourly": 7,      # nothing reads it
+    "attention_hourly": 35,   # _ANOMALY looks 30 days back
+    "wiki_activity": 30,
+    "chatter_hourly": 30,
+    "gkg_article": 30,        # with its gkg_location rows
+    "firms_detection": 30,
+    "theme_daily": 180,
+}
+# Scratch buffers: deleted without an archive.
 RETAIN_ANOMALY_DAYS = 7
 RETAIN_MENTION_HOURS = 72
-RETAIN_GKG_DAYS = 30
-RETAIN_THEME_HOURLY_DAYS = 90
+RETAIN_CHATTER_5MIN_DAYS = 7
+RETAIN_BSKY_URI_HOURS = 48
 
 _HOURLY_EVENTS = """
 INSERT INTO attention_hourly (region_kind, region, hour, events, mentions, sources)
@@ -163,47 +178,64 @@ def rollup(conn, since: datetime, until: datetime | None = None, anomaly: bool =
     return out
 
 
-def prune(conn) -> dict[str, int]:
-    now = datetime.now(timezone.utc)
+def prune_buffers(conn, now: datetime | None = None) -> dict[str, int]:
+    now = now or datetime.now(timezone.utc)
     with conn.transaction():
         return {
-            "event": conn.execute("DELETE FROM event WHERE added_at < %s",
-                                  (now - timedelta(days=RETAIN_EVENT_DAYS),)).rowcount,
             "mention": conn.execute("DELETE FROM mention WHERE mentioned_at < %s",
                                     (now - timedelta(hours=RETAIN_MENTION_HOURS),)).rowcount,
             "wiki_edit": conn.execute("DELETE FROM wiki_edit WHERE at < %s",
                                       (now - timedelta(hours=RETAIN_MENTION_HOURS),)).rowcount,
-            "wiki_activity": conn.execute("DELETE FROM wiki_activity WHERE hour < %s",
-                                          (now - timedelta(days=RETAIN_EVENT_DAYS),)).rowcount,
             "chatter_5min": conn.execute("DELETE FROM chatter_5min WHERE bucket < %s",
-                                         (now - timedelta(days=7),)).rowcount,
-            "chatter_hourly": conn.execute("DELETE FROM chatter_hourly WHERE hour < %s",
-                                           (now - timedelta(days=RETAIN_EVENT_DAYS),)).rowcount,
-            "bsky_uri": conn.execute("DELETE FROM bsky_uri WHERE at < %s", (now - timedelta(hours=48),)).rowcount,
-            "firms_detection": conn.execute("DELETE FROM firms_detection WHERE acq_at < %s",
-                                            (now - timedelta(days=RETAIN_GKG_DAYS),)).rowcount,
-            "gkg_article": conn.execute("DELETE FROM gkg_article WHERE added_at < %s",   # cascades to gkg_location
-                                        (now - timedelta(days=RETAIN_GKG_DAYS),)).rowcount,
-            "theme_hourly": conn.execute("DELETE FROM theme_hourly WHERE hour < %s",
-                                         (now - timedelta(days=RETAIN_THEME_HOURLY_DAYS),)).rowcount,
-            "mention_hourly": conn.execute("DELETE FROM mention_hourly WHERE hour < %s",
-                                           (now - timedelta(days=RETAIN_EVENT_DAYS),)).rowcount,
-            "hourly": conn.execute("DELETE FROM attention_hourly WHERE hour < %s",
-                                   (now - timedelta(days=RETAIN_HOURLY_DAYS),)).rowcount,
+                                         (now - timedelta(days=RETAIN_CHATTER_5MIN_DAYS),)).rowcount,
+            "bsky_uri": conn.execute("DELETE FROM bsky_uri WHERE at < %s",
+                                     (now - timedelta(hours=RETAIN_BSKY_URI_HOURS),)).rowcount,
             "anomaly": conn.execute("DELETE FROM attention_anomaly WHERE hour < %s",
                                     (now - timedelta(days=RETAIN_ANOMALY_DAYS),)).rowcount,
         }
 
 
-def main() -> None:
+_ENV = object()
+
+
+def prune(conn, archive_dir=_ENV, scratch_dir=_ENV, now: datetime | None = None) -> dict:
+    """Scratch buffers are deleted outright. Archived tables are written to
+    Parquet first and only deleted once the file is verified (specs/archive.md);
+    with no archive dir configured they are left alone (R62), never deleted
+    unarchived. Failed tables are listed under "failed"."""
+    env = load_env() if _ENV in (archive_dir, scratch_dir) else {}
+    if archive_dir is _ENV:
+        archive_dir = env.get("NEWSRADAR_ARCHIVE_DIR") or None
+    if scratch_dir is _ENV:
+        scratch_dir = env.get("NEWSRADAR_ARCHIVE_SCRATCH") or None
+    conn.commit()
+    out: dict = prune_buffers(conn, now)
+    if not archive_dir:
+        out["archive"] = "skipped: NEWSRADAR_ARCHIVE_DIR unset"
+        return out
+    try:
+        done, failed = archive.prune_archived(conn, ARCHIVE_WINDOWS, archive_dir, scratch_dir, now)
+    except archive.ArchiveError as e:
+        done, failed = {}, {"archive": str(e)}
+    out.update(done)
+    if failed:
+        out["failed"] = failed
+    return out
+
+
+def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--full", action="store_true", help="roll up every hour present, not just the last 48")
     ap.add_argument("--no-prune", action="store_true")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     with connect() as conn:
         if args.full:
             row = conn.execute("SELECT min(added_at) FROM event").fetchone()
             since = row[0] or datetime.now(timezone.utc)
+            # event outlives attention_hourly's window; rebuilding hours past it
+            # would resurrect rows already archived, with events but no mentions.
+            floor = datetime.now(timezone.utc) - timedelta(days=ARCHIVE_WINDOWS["attention_hourly"])
+            since = max(since, floor.replace(hour=0, minute=0, second=0, microsecond=0))
             # Anomaly needs 30 days of history under it, so it is only meaningful
             # for the last 48 h even on a full run.
             counts = rollup(conn, since, anomaly=False)
@@ -214,6 +246,8 @@ def main() -> None:
         if not args.no_prune:
             counts["pruned"] = prune(conn)
         print(counts)
+    if counts.get("pruned", {}).get("failed"):
+        sys.exit(1)
 
 
 if __name__ == "__main__":

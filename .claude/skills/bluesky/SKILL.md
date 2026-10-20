@@ -51,7 +51,7 @@ About a quarter of posts match at least one place.
 | Table | Holds | Kept |
 |---|---|---|
 | `chatter_5min` | posts per place per 5 min (`source = 'bluesky'`), added by the consumer | 7 d |
-| `chatter_hourly` | the same per hour, recomputed by `rollup.py` | 90 d |
+| `chatter_hourly` | the same per hour, recomputed by `rollup.py` | 30 d, then archive (`archive.py query`) |
 | `bsky_uri` | up to 20 post URIs per place per hour | 48 h |
 | `gazetteer_place`, `gazetteer_name` | GeoNames places (FIPS `country`, GDELT-style `adm1`) and all their names | monthly reload |
 | `chatter_country_hourly` | view: posts per country per hour | |

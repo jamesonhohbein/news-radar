@@ -58,7 +58,10 @@ is lost, and the hot windows can then shrink to what the code actually reads.
    path as "systemd unit failed". No new notifier.
 4. **Each table gets its own transaction** (export, verify, delete), instead of
    today's single transaction around the whole prune. This keeps one failure
-   from blocking every table.
+   from blocking every table. As built, each (table, day) slice is its own
+   REPEATABLE READ transaction, so export and delete see one snapshot and a
+   file in the archive always matches a committed delete; a table stops at
+   its first failed slice.
 5. **Archived tables and new hot windows:**
 
 | Table | Hot window now | Proposed | Why that number |
@@ -72,6 +75,13 @@ is lost, and the hot windows can then shrink to what the code actually reads.
 | `gkg_article` + `gkg_location` | 30 d | 30 d | unchanged, now archived instead of dropped |
 | `firms_detection` | 30 d | 30 d | unchanged, now archived |
 | `theme_daily` | forever | 180 d | stops the ~40G/yr growth; older data is queryable from the archive |
+
+   **Amendment 1 (2026-10-19):** `event` rows from the `gdacs-alerts` and
+   `usgs-volcanoes` sources are neither archived nor pruned. Their `added_at`
+   is the upstream start date and the feed keeps serving the item until the
+   episode ends, so the old prune deleted 13 live rows every hour, the next
+   fetch recreated them (map flicker), and with an archive each would have
+   written a new file per hour. They are about 1.2k rows in total.
 
    `mention`, `wiki_edit`, `chatter_5min`, `bsky_uri` and `attention_anomaly`
    are short-lived scratch buffers. They keep being deleted without an archive.
@@ -147,6 +157,7 @@ is lost, and the hot windows can then shrink to what the code actually reads.
 | T65 | R65 | Round trip: fixture rows including `geom`, `props` jsonb and `themes[]`, archived, then read through `archive.py query`. The result equals the rows selected before archiving. |
 | T66 | R66 | Live check: `backup-labels.sh roots` includes the archive dir, and the next borg run's root count rises by one. |
 | T67 | R67 | Live run of `scripts/reclaim.sh` on hog. The timers are active again afterwards, `news-radar_pgdata` shrinks, and the gain is recorded in this spec. |
+| T68 | R64, Amendment 1 | An old `gdacs-alerts` and an old `usgs-volcanoes` event are neither archived nor deleted; an old event from another source is. |
 
 T57-T65 run in the existing `DBCase` suite against a temporary archive dir.
 T66 and T67 are live checks done on hog.

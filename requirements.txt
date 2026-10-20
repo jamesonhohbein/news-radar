@@ -1,3 +1,6 @@
 psycopg[binary]>=3.2
 websockets>=12
 pyahocorasick>=2.1
+pyarrow>=17
+duckdb>=1.1
+pytz>=2024.1   # duckdb needs it to return timestamptz values

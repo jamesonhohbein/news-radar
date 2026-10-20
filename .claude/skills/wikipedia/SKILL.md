@@ -40,7 +40,7 @@ not cached or checked over 7 days ago. `rollup.py` rolls the buffer into
 | Table | Holds | Kept |
 |---|---|---|
 | `wiki_edit` | wiki, title, time, user hash, bot, created, rev | 72 h |
-| `wiki_activity` | per page per hour: edits, distinct human editors, created | 90 d |
+| `wiki_activity` | per page per hour: edits, distinct human editors, created | 30 d, then archive (`archive.py query`) |
 | `wiki_page` | coordinates and country for pages that got busy (NULL geom = none) | |
 | `wiki_geo_hourly` | view: geotagged pages' editors per country per hour | |
 
