@@ -1,6 +1,6 @@
 # Archive before prune
 
-Status: proposed 2026-10-18
+Status: proposed 2026-10-18; landed and deployed 2026-10-19 (7448e7d). T57-T65 and T68 pass; T67 passed; T66 waits on the next borg run (see Results).
 
 ## Why
 
@@ -161,6 +161,12 @@ is lost, and the hot windows can then shrink to what the code actually reads.
 
 T57-T65 run in the existing `DBCase` suite against a temporary archive dir.
 T66 and T67 are live checks done on hog.
+
+### Results (2026-10-19)
+
+- First live pass: 20,803,578 `theme_hourly`, 6,956,667 `mention_hourly` and 291,000 `attention_hourly` rows archived and deleted; 92 Parquet files, 86 MB. DuckDB counts equal the deleted counts, and day spot checks (theme_hourly 2026-10-01, attention_hourly 2026-09-01) match the pre-pass Postgres values exactly. Event, gkg and the rest had nothing due yet.
+- T66, first half: `backup-labels.sh roots` lists 44 roots including `/mnt/hdd/home/jameson/news-radar-archive`. Second half (borg root count +1) waits on the run of 2026-10-20 03:06 PDT.
+- T67: `scripts/reclaim.sh` took 27 s and restarted all five timers. theme_hourly 4879 to 1053 MB, mention_hourly 1091 to 91 MB, attention_hourly 159 to 48 MB; database 21 to 16 GB; `news-radar_pgdata` 23.71 to 18.53 GB; `/mnt/fast` free 16 to 21 GB.
 
 ## Architecture
 
