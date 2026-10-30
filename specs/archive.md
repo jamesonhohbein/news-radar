@@ -177,6 +177,7 @@ T66 and T67 are live checks done on hog.
 
 - First live pass: 20,803,578 `theme_hourly`, 6,956,667 `mention_hourly` and 291,000 `attention_hourly` rows archived and deleted; 92 Parquet files, 86 MB. DuckDB counts equal the deleted counts, and day spot checks (theme_hourly 2026-10-01, attention_hourly 2026-09-01) match the pre-pass Postgres values exactly. Event, gkg and the rest had nothing due yet.
 - T66, first half: `backup-labels.sh roots` lists 44 roots including `/mnt/hdd/home/jameson/news-radar-archive`. Second half passed: the 2026-10-20 03:06 PDT borg run resolved 44 roots with the archive dir among them (audit drift 0), and both the local (03:17) and offsite (03:41) targets succeeded.
+- Amendment 2 (2026-10-29): AR-A2-1 pass, `min(day)` = today minus 7 after the 22:25 rollup. AR-A2-2 pass, 21,435,872 `theme_daily` rows archived and deleted, DuckDB count over the archive equal (82 MB of Parquet). AR-A2-3 pass, `reclaim.sh theme_daily` took 25 s, theme_daily 4006 to 695 MB, database 21 to 18 GB, `news-radar_pgdata` 23.56 to 20.09 GB, all five timers active after; `/mnt/fast` free 26 to 29 GB.
 - T67: `scripts/reclaim.sh` took 27 s and restarted all five timers. theme_hourly 4879 to 1053 MB, mention_hourly 1091 to 91 MB, attention_hourly 159 to 48 MB; database 21 to 16 GB; `news-radar_pgdata` 23.71 to 18.53 GB; `/mnt/fast` free 16 to 21 GB.
 
 ## Architecture
