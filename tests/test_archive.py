@@ -16,8 +16,8 @@ from newsradar import archive
 from tests.dbcase import DBCase
 
 NOW = datetime(2026, 10, 19, 12, 0, tzinfo=timezone.utc)
-OLD = datetime(2026, 7, 1, 6, 30, tzinfo=timezone.utc)      # past every window but theme_daily's
-ANCIENT = datetime(2026, 3, 1, 6, 0, tzinfo=timezone.utc)    # past theme_daily's 180 d
+OLD = datetime(2026, 7, 1, 6, 30, tzinfo=timezone.utc)      # past every window
+ANCIENT = datetime(2026, 3, 1, 6, 0, tzinfo=timezone.utc)    # past every window, on its own day
 NEW = NOW - timedelta(days=1)                                # inside every window
 
 
@@ -84,13 +84,13 @@ class T57ArchiveThenDelete(ArchiveCase):
         self.assertNotIn("failed", out)
         day = OLD.date().isoformat()
         for t in ("event", "theme_hourly", "mention_hourly", "attention_hourly", "wiki_activity",
-                  "chatter_hourly", "gkg_article", "gkg_location", "firms_detection"):
+                  "chatter_hourly", "gkg_article", "gkg_location", "firms_detection", "theme_daily"):
             f = self.arch / t / "2026" / f"{day}.0.parquet"
             self.assertTrue(f.exists(), t)
             self.assertEqual(pq.ParquetFile(f).metadata.num_rows, 2 if t == "gkg_location" else 1, t)
-        # theme_daily: OLD is inside 180 d, ANCIENT is not.
+        # theme_daily: OLD and ANCIENT are both past 7 d (Amendment 2); NEW stays.
         self.assertTrue((self.arch / "theme_daily" / "2026" / "2026-03-01.0.parquet").exists())
-        self.assertEqual(self.count("theme_daily"), 2)
+        self.assertEqual(self.count("theme_daily"), 1)
         for t in ("event", "theme_hourly", "mention_hourly", "attention_hourly", "wiki_activity",
                   "chatter_hourly", "gkg_article", "firms_detection"):
             self.assertEqual(self.count(t), 1, t)   # only the NEW row is left
@@ -181,7 +181,7 @@ class T61CrashBeforeMove(ArchiveCase):
         self.fixture(OLD)
         with mock.patch.object(archive, "_move_into", side_effect=OSError("crash")):
             out = self.prune()
-        self.assertEqual(len(out["failed"]), 8)   # theme_daily has nothing due
+        self.assertEqual(len(out["failed"]), 9)   # every archived table has OLD rows due
         self.assertEqual(self.files(), [])
         self.assertEqual(self.count("event"), 1)
         self.assertEqual(self.count("gkg_location"), 2)
@@ -217,7 +217,7 @@ class T64Windows(unittest.TestCase):
         self.assertEqual(rollup.ARCHIVE_WINDOWS, {
             "event": 60, "theme_hourly": 7, "mention_hourly": 7, "attention_hourly": 35,
             "wiki_activity": 30, "chatter_hourly": 30, "gkg_article": 30, "firms_detection": 30,
-            "theme_daily": 180})
+            "theme_daily": 7})
         self.assertEqual([t.name for t in archive.tables(rollup.ARCHIVE_WINDOWS)],
                          ["event", "theme_hourly", "mention_hourly", "attention_hourly", "wiki_activity",
                           "chatter_hourly", "gkg_article", "firms_detection", "theme_daily"])

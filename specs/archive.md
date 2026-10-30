@@ -74,7 +74,7 @@ is lost, and the hot windows can then shrink to what the code actually reads.
 | `chatter_hourly` | 90 d | 30 d | same as above |
 | `gkg_article` + `gkg_location` | 30 d | 30 d | unchanged, now archived instead of dropped |
 | `firms_detection` | 30 d | 30 d | unchanged, now archived |
-| `theme_daily` | forever | 180 d | stops the ~40G/yr growth; older data is queryable from the archive |
+| `theme_daily` | forever | 7 d (was 180 d, Amendment 2) | nothing reads it in Postgres; older data is queryable from the archive |
 
    **Amendment 1 (2026-10-19):** `event` rows from the `gdacs-alerts` and
    `usgs-volcanoes` sources are neither archived nor pruned. Their `added_at`
@@ -82,6 +82,14 @@ is lost, and the hot windows can then shrink to what the code actually reads.
    episode ends, so the old prune deleted 13 live rows every hour, the next
    fetch recreated them (map flicker), and with an archive each would have
    written a new file per hour. They are about 1.2k rows in total.
+
+   **Amendment 2 (2026-10-29):** `theme_daily`'s window drops from 180 d to
+   7 d. `/mnt/fast` hit 100% that day, and `theme_daily` (4.0 GB, about
+   110 MB/day) has no reader in Postgres: only `store.py` writes it, and only
+   the archive and tests touch it otherwise. A 180 d window would have added
+   about 16 GB to the NVMe before filling around 2027-03-23. Rows past the
+   window are archived first, so nothing is lost. A one-off
+   `scripts/reclaim.sh theme_daily` returns the space (Decision 8).
 
    `mention`, `wiki_edit`, `chatter_5min`, `bsky_uri` and `attention_anomaly`
    are short-lived scratch buffers. They keep being deleted without an archive.
@@ -158,6 +166,9 @@ is lost, and the hot windows can then shrink to what the code actually reads.
 | T66 | R66 | Live check: `backup-labels.sh roots` includes the archive dir, and the next borg run's root count rises by one. |
 | T67 | R67 | Live run of `scripts/reclaim.sh` on hog. The timers are active again afterwards, `news-radar_pgdata` shrinks, and the gain is recorded in this spec. |
 | T68 | R64, Amendment 1 | An old `gdacs-alerts` and an old `usgs-volcanoes` event are neither archived nor deleted; an old event from another source is. |
+| AR-A2-1 | R64, Amendment 2 | Live: after the next rollup, `min(day)` in `theme_daily` is at least today minus 7. |
+| AR-A2-2 | R58, Amendment 2 | Live: `theme_daily` rows in the archive's Parquet for the newly archived days equal the rows removed from Postgres. |
+| AR-A2-3 | R67, Amendment 2 | Live: `scripts/reclaim.sh theme_daily` shrinks `news-radar_pgdata` by at least 3 GB and the timers are active afterwards. |
 
 T57-T65 run in the existing `DBCase` suite against a temporary archive dir.
 T66 and T67 are live checks done on hog.
