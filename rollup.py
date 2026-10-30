@@ -35,7 +35,7 @@ ARCHIVE_WINDOWS = {
     "chatter_hourly": 30,
     "gkg_article": 30,        # with its gkg_location rows
     "firms_detection": 30,
-    "theme_daily": 180,
+    "theme_daily": 7,          # nothing reads it (specs/archive.md Amendment 2)
 }
 # Scratch buffers: deleted without an archive.
 RETAIN_ANOMALY_DAYS = 7
